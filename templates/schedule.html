@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}촬영 일정{% endblock %}
+{% block page_title %}촬영 일정{% endblock %}
+
+{% block content %}
+<!-- 필터 -->
+<form method="get" action="/schedule" class="filter-bar">
+  <input type="hidden" name="year" value="{{ year }}">
+  <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 월</option>
+    {% for m in MONTHS %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
+  </select>
+  <select name="dept" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 부서</option>
+    {% for d in depts %}<option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-primary" type="submit"><i class="bi-search me-1"></i>검색</button>
+  <a href="/schedule?year={{ year }}" class="btn btn-outline-secondary">초기화</a>
+  <span class="ms-auto text-muted" style="font-size:.82rem;">
+    촬영 예정 <strong>{{ grouped|length }}</strong>일
+  </span>
+</form>
+
+{% if grouped %}
+  {% for shoot_date in grouped|sort %}
+  {% set items = grouped[shoot_date] %}
+  <div class="schedule-date-header">
+    <i class="bi-camera-video-fill"></i>
+    {{ shoot_date }}
+    <span class="ms-auto badge bg-white text-primary" style="font-size:.78rem;">{{ items|length }}건</span>
+  </div>
+  {% for r in items %}
+  <div class="schedule-item">
+    <div class="time">
+      <i class="bi-clock me-1"></i>{{ r.shooting_time or '-' }}
+    </div>
+    <div style="flex:1;">
+      <div class="title">{{ r.course_name | clean_name }}</div>
+      <div class="meta">
+        {% if r.department %}<span class="me-3"><i class="bi-building me-1"></i>{{ r.department }}</span>{% endif %}
+        {% if r.instructor %}<span class="me-3"><i class="bi-person me-1"></i>{{ r.instructor }}</span>{% endif %}
+        {% if r.location %}<span class="me-3"><i class="bi-geo-alt me-1"></i>{{ r.location }}</span>{% endif %}
+        {% if r.shooting_format %}<span class="badge-format">{{ r.shooting_format }}</span>{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right; min-width:80px;">
+      {% if r.session_count %}<div style="font-size:.8rem; color:#555;">{{ r.session_count }}차시</div>{% endif %}
+      {% if r.filming_consent == '완료' %}
+        <span style="font-size:.72rem; color:#1e8e3e;"><i class="bi-check-circle me-1"></i>동의서</span>
+      {% else %}
+        <span style="font-size:.72rem; color:#f57c00;"><i class="bi-exclamation-circle me-1"></i>동의서 미수령</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  <div style="height:16px;"></div>
+  {% endfor %}
+{% else %}
+  <div class="text-center py-5">
+    <i class="bi-camera-video text-muted" style="font-size:3rem;"></i>
+    <p class="text-muted mt-3">촬영 일정이 없습니다.</p>
+  </div>
+{% endif %}
+{% endblock %}

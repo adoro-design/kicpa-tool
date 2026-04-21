@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}정산 관리{% endblock %}
+{% block page_title %}정산 관리{% endblock %}
+
+{% block content %}
+<!-- 필터 -->
+<form method="get" action="/billing" class="filter-bar">
+  <input type="hidden" name="year" value="{{ year }}">
+  <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 월</option>
+    {% for m in MONTHS %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
+  </select>
+  <select name="dept" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 부서</option>
+    {% for d in depts %}<option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-primary" type="submit"><i class="bi-search me-1"></i>검색</button>
+  <a href="/billing?year={{ year }}" class="btn btn-outline-secondary">초기화</a>
+</form>
+
+<!-- 부서별 요약 -->
+{% if summary %}
+<div class="row g-3 mb-4">
+  {% for dept_name, stat in summary.items() %}
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="card-title text-truncate" style="font-size:.88rem;" title="{{ dept_name }}">{{ dept_name }}</h6>
+        <div class="d-flex justify-content-between align-items-end">
+          <div>
+            <div style="font-size:.75rem; color:#888;">콘텐츠 {{ stat.count }}건 / {{ stat.sessions }}차시</div>
+            <div style="font-size:1.2rem; font-weight:700; color:#1a2340;">{{ "{:,}".format(stat.total) }}원</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:.72rem; color:#888;">정산완료</div>
+            <div style="font-size:.95rem; font-weight:600; color:#1e8e3e;">{{ "{:,}".format(stat.billed) }}원</div>
+          </div>
+        </div>
+        {% if stat.total > 0 %}
+        <div class="progress mt-2">
+          <div class="progress-bar" style="width:{{ (stat.billed / stat.total * 100)|int }}%;"></div>
+        </div>
+        <div style="font-size:.7rem; color:#888; margin-top:3px;">{{ (stat.billed / stat.total * 100)|int }}% 정산완료</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- 전체 합계 -->
+{% set grand_total = summary.values()|map(attribute='total')|sum %}
+{% set grand_billed = summary.values()|map(attribute='billed')|sum %}
+<div class="billing-summary mb-4">
+  <div class="row align-items-center">
+    <div class="col-md-3">
+      <div style="font-size:.8rem; opacity:.8;">{{ year }}년 총 개발비</div>
+      <div class="amount">{{ "{:,}".format(grand_total) }}원</div>
+    </div>
+    <div class="col-md-3">
+      <div style="font-size:.8rem; opacity:.8;">정산 완료</div>
+      <div style="font-size:1.5rem; font-weight:700;">{{ "{:,}".format(grand_billed) }}원</div>
+    </div>
+    <div class="col-md-3">
+      <div style="font-size:.8rem; opacity:.8;">미정산</div>
+      <div style="font-size:1.5rem; font-weight:700;">{{ "{:,}".format(grand_total - grand_billed) }}원</div>
+    </div>
+    <div class="col-md-3 text-end">
+      <a href="/export?year={{ year }}&month={{ month }}&dept={{ dept }}&billing=N" class="btn btn-light btn-sm">
+        <i class="bi-download me-1"></i>미정산 내보내기
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- 상세 목록 -->
+<div class="table-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>정산 상세 목록</span>
+    <span class="text-muted" style="font-size:.8rem;">총 {{ contents|length }}건</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>촬영월</th>
+          <th>과정명</th>
+          <th>담당부서</th>
+          <th>차시수</th>
+          <th>챕터수</th>
+          <th>촬영형식</th>
+          <th>단가</th>
+          <th>금액</th>
+          <th>정산여부</th>
+          <th>오픈일</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set total_amt = namespace(val=0) %}
+        {% for r in contents %}
+        {% set price = get_price(r.shooting_format or '') %}
+        {% set amt = price * (r.session_count or 0) %}
+        {% set total_amt.val = total_amt.val + amt %}
+        <tr>
+          <td><span class="badge-month">{{ r.shooting_month or '-' }}</span></td>
+          <td style="max-width:220px; font-size:.84rem;">
+            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ r.course_name }}">
+              {{ r.course_name | clean_name }}
+            </div>
+          </td>
+          <td style="font-size:.83rem;">{{ r.department or '-' }}</td>
+          <td class="text-center">{{ r.session_count or '-' }}</td>
+          <td class="text-center">{{ r.chapter_count or '-' }}</td>
+          <td>{% if r.shooting_format %}<span class="badge-format">{{ r.shooting_format }}</span>{% else %}-{% endif %}</td>
+          <td class="text-end" style="font-size:.83rem;">
+            {% if price %}{{ "{:,}".format(price) }}원{% else %}-{% endif %}
+          </td>
+          <td class="text-end" style="font-size:.84rem; font-weight:{% if amt %}600{% else %}400{% endif %};">
+            {% if amt %}{{ "{:,}".format(amt) }}원{% else %}-{% endif %}
+          </td>
+          <td>
+            {% if r.billing %}<span class="badge-billed">정산완료</span>{% else %}<span class="badge-notyet">미정산</span>{% endif %}
+          </td>
+          <td style="font-size:.8rem;">{{ r.open_date | fmt_date if r.open_date else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f8f9fc; font-weight:700;">
+          <td colspan="7" class="text-end">합계</td>
+          <td class="text-end" style="color:#1a2340;">{{ "{:,}".format(grand_total) }}원</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

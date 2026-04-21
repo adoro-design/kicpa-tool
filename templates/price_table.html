@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}단가표 관리{% endblock %}
+{% block page_title %}단가표 관리{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-{{ 'success' if msg_type=='success' else 'danger' }} alert-dismissible fade show">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" action="/price_table/update" id="priceForm">
+<div class="row g-4">
+  <!-- 신규 개발 단가 -->
+  <div class="col-md-6">
+    <div class="form-section">
+      <div class="form-section-title">신규 개발 단가</div>
+      {% for p in prices if p.category == 'new_dev' %}
+      <div class="price-row">
+        <input type="hidden" name="id_{{ p.id }}" value="{{ p.id }}">
+        <div class="price-name">{{ p.type_name }}</div>
+        <input type="number" name="price_{{ p.id }}" class="form-control price-input"
+               value="{{ p.unit_price }}" step="1000">
+        <div class="price-unit">원/{{ p.unit }}</div>
+        <div class="form-check ms-2">
+          <input class="form-check-input" type="checkbox" name="active_{{ p.id }}" id="a{{ p.id }}"
+                 {% if p.is_active %}checked{% endif %}>
+          <label class="form-check-label" for="a{{ p.id }}" style="font-size:.75rem;">사용</label>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 포팅 단가 -->
+  <div class="col-md-6">
+    <div class="form-section">
+      <div class="form-section-title">포팅 단가</div>
+      {% for p in prices if p.category == 'porting' %}
+      <div class="price-row">
+        <input type="hidden" name="id_{{ p.id }}" value="{{ p.id }}">
+        <div class="price-name">{{ p.type_name }}</div>
+        <input type="number" name="price_{{ p.id }}" class="form-control price-input"
+               value="{{ p.unit_price }}" step="1000">
+        <div class="price-unit">원/{{ p.unit }}</div>
+        <div class="form-check ms-2">
+          <input class="form-check-input" type="checkbox" name="active_{{ p.id }}" id="a{{ p.id }}"
+                 {% if p.is_active %}checked{% endif %}>
+          <label class="form-check-label" for="a{{ p.id }}" style="font-size:.75rem;">사용</label>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 출장비 -->
+  <div class="col-md-6">
+    <div class="form-section">
+      <div class="form-section-title">출장비</div>
+      {% for p in prices if p.category == 'travel' %}
+      <div class="price-row">
+        <input type="hidden" name="id_{{ p.id }}" value="{{ p.id }}">
+        <div class="price-name">{{ p.type_name }}</div>
+        <input type="number" name="price_{{ p.id }}" class="form-control price-input"
+               value="{{ p.unit_price }}" step="1000">
+        <div class="price-unit">원/{{ p.unit }}</div>
+        <div class="form-check ms-2">
+          <input class="form-check-input" type="checkbox" name="active_{{ p.id }}" id="a{{ p.id }}"
+                 {% if p.is_active %}checked{% endif %}>
+          <label class="form-check-label" for="a{{ p.id }}" style="font-size:.75rem;">사용</label>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 기타 -->
+  <div class="col-md-6">
+    <div class="form-section">
+      <div class="form-section-title">기타</div>
+      {% set others = prices | selectattr('category', 'ne', 'new_dev') | selectattr('category', 'ne', 'porting') | selectattr('category', 'ne', 'travel') | list %}
+      {% if others %}
+        {% for p in others %}
+        <div class="price-row">
+          <input type="hidden" name="id_{{ p.id }}" value="{{ p.id }}">
+          <div class="price-name">{{ p.type_name }}</div>
+          <input type="number" name="price_{{ p.id }}" class="form-control price-input"
+                 value="{{ p.unit_price }}" step="1000">
+          <div class="price-unit">원/{{ p.unit }}</div>
+          <div class="form-check ms-2">
+            <input class="form-check-input" type="checkbox" name="active_{{ p.id }}" id="a{{ p.id }}"
+                   {% if p.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="a{{ p.id }}" style="font-size:.75rem;">사용</label>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted" style="font-size:.84rem;">등록된 항목이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="d-flex justify-content-end mt-2">
+  <button type="submit" class="btn btn-primary"><i class="bi-save me-1"></i>단가표 저장</button>
+</div>
+</form>
+
+<!-- 현재 단가 요약 표 -->
+<div class="form-section mt-4">
+  <div class="form-section-title">단가표 요약</div>
+  <table class="table table-sm" style="font-size:.84rem;">
+    <thead>
+      <tr style="background:#f8f9fc;">
+        <th>구분</th><th>항목</th><th class="text-end">단가</th><th>단위</th><th>상태</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in prices %}
+      <tr>
+        <td><span style="font-size:.72rem; color:#888;">{{ p.category }}</span></td>
+        <td>{{ p.type_name }}</td>
+        <td class="text-end font-monospace">{{ "{:,}".format(p.unit_price) }}원</td>
+        <td>{{ p.unit }}</td>
+        <td>{% if p.is_active %}<span class="badge bg-success" style="font-size:.7rem;">사용중</span>{% else %}<span class="badge bg-secondary" style="font-size:.7rem;">미사용</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

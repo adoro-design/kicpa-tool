@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}문서 생성{% endblock %}
+{% block page_title %}문서 자동 생성{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- 부서 선택 및 생성 -->
+  <div class="col-lg-5">
+    <div class="form-section">
+      <div class="form-section-title">문서 생성</div>
+      <form method="post" action="/documents/generate" id="docForm">
+        <input type="hidden" name="year" value="{{ year }}">
+        <div class="mb-3">
+          <label class="form-label">담당부서 선택 <span class="text-danger">*</span></label>
+          <select name="dept" class="form-select" required>
+            <option value="">부서를 선택하세요</option>
+            {% for d in depts %}
+            <option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">정산 월 (선택)</label>
+          <select name="billing_month" class="form-select">
+            <option value="">전체</option>
+            {% for m in MONTHS %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- 생성할 문서 선택 -->
+        <div class="mb-4">
+          <label class="form-label">생성할 문서</label>
+          <div class="d-flex flex-column gap-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="doc_request" id="d1" checked>
+              <label class="form-check-label" for="d1">
+                <i class="bi-file-earmark-word text-primary me-1"></i>개발요청서
+                <small class="text-muted">(Word)</small>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="doc_attachment" id="d2" checked>
+              <label class="form-check-label" for="d2">
+                <i class="bi-file-earmark-excel text-success me-1"></i>개발요청서 첨부자료
+                <small class="text-muted">(Excel)</small>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="doc_pl" id="d3" checked>
+              <label class="form-check-label" for="d3">
+                <i class="bi-file-earmark-excel text-success me-1"></i>손익분석서
+                <small class="text-muted">(Excel)</small>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="doc_profile" id="d4" checked>
+              <label class="form-check-label" for="d4">
+                <i class="bi-file-earmark-excel text-success me-1"></i>프로젝트 프로파일
+                <small class="text-muted">(Excel)</small>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="doc_studio" id="d5">
+              <label class="form-check-label" for="d5">
+                <i class="bi-file-earmark-word text-primary me-1"></i>스튜디오 대관료 정산
+                <small class="text-muted">(Word)</small>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi-file-earmark-arrow-down me-1"></i>문서 생성 (준비 중)
+        </button>
+        <div class="form-text text-center mt-2">
+          <i class="bi-info-circle me-1"></i>문서 생성 기능은 다음 업데이트에서 제공됩니다.
+        </div>
+      </form>
+    </div>
+
+    <!-- 생성된 문서 다운로드 안내 -->
+    <div class="card mt-3">
+      <div class="card-body" style="font-size:.83rem;">
+        <h6 style="font-size:.85rem;"><i class="bi-folder2-open me-1 text-warning"></i>생성된 문서 위치</h6>
+        <p class="text-muted mb-0">생성된 문서는 <code>generated/[부서명]/</code> 폴더에 저장됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 부서별 현황 + 생성 이력 -->
+  <div class="col-lg-7">
+    <!-- 부서별 콘텐츠 현황 -->
+    <div class="table-card mb-4">
+      <div class="card-header">부서별 콘텐츠 현황 ({{ year }}년)</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>담당부서</th>
+            <th class="text-center">콘텐츠</th>
+            <th class="text-center">차시수</th>
+            <th class="text-center">챕터수</th>
+            <th>문서생성</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in dept_summary %}
+          <tr>
+            <td style="font-weight:500;">{{ d.department }}</td>
+            <td class="text-center">{{ d.total }}</td>
+            <td class="text-center">{{ d.sessions or 0 }}</td>
+            <td class="text-center">{{ d.chapters or 0 }}</td>
+            <td>
+              <button class="btn btn-xs btn-outline-primary" style="font-size:.74rem; padding:2px 8px;"
+                      onclick="document.querySelector('select[name=dept]').value='{{ d.department }}'; document.getElementById('d1').checked=true; document.getElementById('d2').checked=true;">
+                선택
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not dept_summary %}
+          <tr><td colspan="5" class="text-center text-muted py-3">데이터가 없습니다.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 생성 이력 -->
+    <div class="table-card">
+      <div class="card-header">최근 문서 생성 이력</div>
+      <table class="table">
+        <thead>
+          <tr><th>생성일시</th><th>문서유형</th><th>담당부서</th><th>파일</th></tr>
+        </thead>
+        <tbody>
+          {% if history %}
+            {% for h in history %}
+            <tr>
+              <td style="font-size:.8rem;">{{ h.created_at.strftime('%m.%d %H:%M') if h.created_at else '-' }}</td>
+              <td style="font-size:.82rem;">{{ h.doc_type or '-' }}</td>
+              <td style="font-size:.82rem;">{{ h.department or '-' }}</td>
+              <td>
+                {% if h.file_path %}
+                <a href="/download/{{ h.id }}" class="btn btn-xs btn-outline-secondary" style="font-size:.74rem; padding:2px 8px;">
+                  <i class="bi-download me-1"></i>다운로드
+                </a>
+                {% else %}-{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-3">생성 이력이 없습니다.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

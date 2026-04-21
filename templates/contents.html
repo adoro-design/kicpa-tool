@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}콘텐츠 목록{% endblock %}
+{% block page_title %}콘텐츠 목록{% endblock %}
+
+{% block topbar_right %}
+<div class="d-flex gap-2">
+  <a href="/export?year={{ year }}&dept={{ dept }}&month={{ month }}&billing={{ billing }}&search={{ search }}"
+     class="btn btn-sm btn-outline-secondary"><i class="bi-download me-1"></i>Excel 내보내기</a>
+  {% if user and user.role == 'admin' %}
+  <a href="/content/edit" class="btn btn-sm btn-primary"><i class="bi-plus-lg me-1"></i>콘텐츠 추가</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 필터 -->
+<form method="get" action="/contents" class="filter-bar">
+  <input type="hidden" name="year" value="{{ year }}">
+  <select name="dept" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 부서</option>
+    {% for d in depts %}<option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>{% endfor %}
+  </select>
+  <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 월</option>
+    {% for m in MONTHS %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
+  </select>
+  <select name="fmt" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">전체 형식</option>
+    {% for f in formats %}<option value="{{ f }}" {% if f==fmt %}selected{% endif %}>{{ f }}</option>{% endfor %}
+  </select>
+  <select name="billing" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    <option value="">정산 전체</option>
+    <option value="Y" {% if billing=='Y' %}selected{% endif %}>정산완료</option>
+    <option value="N" {% if billing=='N' %}selected{% endif %}>미정산</option>
+  </select>
+  <input type="text" name="search" class="form-control" placeholder="과정명 검색" value="{{ search }}" style="width:200px;">
+  <button class="btn btn-primary" type="submit"><i class="bi-search me-1"></i>검색</button>
+  <a href="/contents?year={{ year }}" class="btn btn-outline-secondary">초기화</a>
+  <span class="ms-auto text-muted" style="font-size:.82rem;">총 <strong>{{ total }}</strong>건</span>
+</form>
+
+<!-- 테이블 -->
+<div class="table-card">
+  <div style="overflow-x:auto;">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th style="width:40px;">#</th>
+          <th>촬영월</th>
+          <th>과정명</th>
+          <th>담당부서</th>
+          <th>차시</th>
+          <th>챕터</th>
+          <th>강사</th>
+          <th>촬영날짜</th>
+          <th>형식</th>
+          <th>오픈일</th>
+          <th>정산</th>
+          {% if user and user.role == 'admin' %}
+          <th style="width:80px;">관리</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% if rows %}
+          {% for r in rows %}
+          <tr>
+            <td class="text-muted" style="font-size:.75rem;">{{ loop.index + (page-1)*20 }}</td>
+            <td><span class="badge-month">{{ r.shooting_month or '-' }}</span></td>
+            <td>
+              <div style="max-width:260px; font-weight:500; font-size:.84rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                   title="{{ r.course_name }}">{{ r.course_name | clean_name }}</div>
+              {% if r.required_optional %}<small class="text-muted">{{ r.required_optional }}</small>{% endif %}
+            </td>
+            <td style="font-size:.83rem;">{{ r.department or '-' }}</td>
+            <td class="text-center">{{ r.session_count or '-' }}</td>
+            <td class="text-center">{{ r.chapter_count or '-' }}</td>
+            <td style="font-size:.83rem;">{{ r.instructor or '-' }}</td>
+            <td style="font-size:.8rem; white-space:nowrap;">{{ r.shooting_date | fmt_date if r.shooting_date else '-' }}</td>
+            <td>{% if r.shooting_format %}<span class="badge-format">{{ r.shooting_format }}</span>{% else %}-{% endif %}</td>
+            <td style="font-size:.8rem; white-space:nowrap;">
+              {% if r.open_date %}<span class="badge-open">{{ r.open_date | fmt_date }}</span>{% else %}<span class="badge-notyet">미오픈</span>{% endif %}
+            </td>
+            <td>
+              {% if r.billing %}<span class="badge-billed">완료</span>{% else %}<span class="badge-notyet">-</span>{% endif %}
+            </td>
+            {% if user and user.role == 'admin' %}
+            <td>
+              <a href="/content/edit?id={{ r.id }}" class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;">수정</a>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="12" class="text-center py-5 text-muted">데이터가 없습니다.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 페이지네이션 -->
+  {% if total_pages > 1 %}
+  <div class="d-flex justify-content-center py-3">
+    <nav>
+      <ul class="pagination mb-0">
+        {% if page > 1 %}
+        <li class="page-item"><a class="page-link" href="?year={{ year }}&dept={{ dept }}&month={{ month }}&fmt={{ fmt }}&billing={{ billing }}&search={{ search }}&page={{ page-1 }}">이전</a></li>
+        {% endif %}
+        {% for p in range([1, page-3]|max, [total_pages+1, page+4]|min) %}
+        <li class="page-item {% if p==page %}active{% endif %}">
+          <a class="page-link" href="?year={{ year }}&dept={{ dept }}&month={{ month }}&fmt={{ fmt }}&billing={{ billing }}&search={{ search }}&page={{ p }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        {% if page < total_pages %}
+        <li class="page-item"><a class="page-link" href="?year={{ year }}&dept={{ dept }}&month={{ month }}&fmt={{ fmt }}&billing={{ billing }}&search={{ search }}&page={{ page+1 }}">다음</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}사용자 관리{% endblock %}
+{% block page_title %}사용자 관리{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-{{ 'success' if msg_type=='success' else 'danger' }} alert-dismissible fade show">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- 사용자 목록 -->
+  <div class="col-lg-8">
+    <div class="table-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>사용자 목록</span>
+        <span class="text-muted" style="font-size:.8rem;">총 {{ users|length }}명</span>
+      </div>
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>이름</th>
+            <th>아이디</th>
+            <th>역할</th>
+            <th>상태</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td style="font-weight:600;">{{ u.name }}</td>
+            <td><code style="font-size:.82rem;">{{ u.username }}</code></td>
+            <td>
+              {% if u.role == 'admin' %}
+              <span class="badge bg-primary">관리자</span>
+              {% else %}
+              <span class="badge bg-secondary">촬영감독</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.is_active %}
+              <span class="badge bg-success">활성</span>
+              {% else %}
+              <span class="badge bg-danger">비활성</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <!-- 비밀번호 변경 -->
+                <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;"
+                        data-bs-toggle="modal" data-bs-target="#pwModal{{ u.id }}">
+                  <i class="bi-key"></i>
+                </button>
+                <!-- 활성/비활성 토글 (자기 자신 제외) -->
+                {% if u.id != user.id %}
+                <form method="post" action="/users/toggle" style="display:inline;">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <button type="submit" class="btn btn-xs btn-outline-{{ 'warning' if u.is_active else 'success' }}"
+                          style="font-size:.75rem; padding:2px 8px;"
+                          onclick="return confirm('{% if u.is_active %}비활성화{% else %}활성화{% endif %}하시겠습니까?')">
+                    {% if u.is_active %}<i class="bi-pause-fill"></i>{% else %}<i class="bi-play-fill"></i>{% endif %}
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+
+          <!-- 비밀번호 변경 모달 -->
+          <div class="modal fade" id="pwModal{{ u.id }}" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h6 class="modal-title">비밀번호 변경 - {{ u.name }}</h6>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="post" action="/users/change_pw">
+                  <div class="modal-body">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <label class="form-label">새 비밀번호</label>
+                    <input type="password" name="new_password" class="form-control" required minlength="6">
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary btn-sm">변경</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 사용자 추가 -->
+  <div class="col-lg-4">
+    <div class="form-section">
+      <div class="form-section-title">사용자 추가</div>
+      <form method="post" action="/users/add">
+        <div class="mb-3">
+          <label class="form-label">이름</label>
+          <input type="text" name="name" class="form-control" required placeholder="홍길동">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">아이디</label>
+          <input type="text" name="username" class="form-control" required placeholder="영문 소문자/숫자">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">비밀번호</label>
+          <input type="password" name="password" class="form-control" required minlength="6">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">역할</label>
+          <select name="role" class="form-select">
+            <option value="director">촬영감독</option>
+            <option value="admin">관리자</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary w-100"><i class="bi-person-plus me-1"></i>사용자 추가</button>
+      </form>
+    </div>
+
+    <!-- 권한 안내 -->
+    <div class="card mt-3">
+      <div class="card-body" style="font-size:.82rem;">
+        <h6 style="font-size:.85rem; font-weight:700; margin-bottom:10px;">권한 안내</h6>
+        <div class="mb-2">
+          <span class="badge bg-primary me-1">관리자</span>
+          <span class="text-muted">모든 기능 접근 가능</span>
+        </div>
+        <div>
+          <span class="badge bg-secondary me-1">촬영감독</span>
+          <span class="text-muted">콘텐츠 목록, 촬영 일정, Excel 기능만 접근</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

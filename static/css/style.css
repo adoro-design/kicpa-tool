@@ -1,0 +1,165 @@
+/* ─── KICPA 콘텐츠 관리 - Global Styles ─── */
+* { box-sizing: border-box; }
+body { font-family: 'Noto Sans KR', sans-serif; background: #f0f2f5; color: #333; margin:0; }
+
+/* ─── Sidebar ─── */
+#sidebar {
+  width: 230px; min-height: 100vh; background: #1a2340;
+  display: flex; flex-direction: column; flex-shrink: 0;
+  position: sticky; top: 0;
+}
+.sidebar-brand {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  color: #fff;
+}
+.sidebar-brand h6 { margin:0; font-size:.7rem; letter-spacing:3px; color:#8fa3c8; text-transform:uppercase; }
+.sidebar-brand strong { font-size:1.05rem; font-weight:700; }
+#sidebar .nav { padding: 8px 0; }
+#sidebar .nav-section {
+  padding: 16px 18px 4px;
+  font-size:.65rem; letter-spacing:2px; text-transform:uppercase; color:#566785; font-weight:600;
+}
+#sidebar .nav-item { margin: 1px 8px; }
+#sidebar .nav-link {
+  color: #a8bbda; padding: 8px 12px; border-radius: 6px;
+  font-size: .85rem; display:flex; align-items:center; gap:8px; transition:.15s;
+}
+#sidebar .nav-link:hover { background: rgba(255,255,255,.06); color:#fff; }
+#sidebar .nav-link.active { background: #2f5496; color:#fff; font-weight:600; }
+#sidebar .nav-link i { font-size:1rem; width:18px; text-align:center; }
+.sidebar-footer {
+  margin-top: auto; padding: 14px 18px 16px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  font-size: .8rem; color: #8fa3c8;
+}
+
+/* ─── Main ─── */
+#main-content { min-height: 100vh; display:flex; flex-direction:column; }
+.top-bar {
+  background: #fff; padding: 14px 24px;
+  border-bottom: 1px solid #e0e4ea;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  position: sticky; top:0; z-index:100;
+}
+.page-title { margin:0; font-size:1.05rem; font-weight:700; color:#1a2340; }
+.content-area { padding: 24px; flex: 1; }
+
+/* ─── Stat Cards ─── */
+.stat-card {
+  background:#fff; border-radius:12px; padding:20px 22px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display:flex; align-items:center; gap:16px;
+}
+.stat-icon {
+  width:50px; height:50px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0;
+}
+.stat-label { font-size:.75rem; color:#888; margin-bottom:2px; }
+.stat-value { font-size:1.6rem; font-weight:800; color:#1a2340; line-height:1; }
+.stat-sub { font-size:.72rem; color:#999; margin-top:3px; }
+
+/* ─── Cards ─── */
+.card { border:none; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.card-header { background:#fff; border-bottom:1px solid #f0f0f0; font-weight:600; border-radius:12px 12px 0 0 !important; }
+
+/* ─── Filter Bar ─── */
+.filter-bar {
+  background:#fff; border-radius:10px; padding:14px 16px;
+  margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.filter-bar .form-select, .filter-bar .form-control {
+  font-size:.82rem; height:34px; padding:4px 10px; border-color:#ddd;
+}
+.filter-bar .btn { font-size:.82rem; height:34px; padding:4px 14px; }
+
+/* ─── Tables ─── */
+.table-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); overflow:hidden; }
+.table-card .table { margin:0; font-size:.83rem; }
+.table-card .table thead th {
+  background:#f8f9fc; color:#555; font-weight:600; font-size:.78rem;
+  border-bottom:2px solid #e8ecf0; padding:10px 12px; white-space:nowrap;
+}
+.table-card .table tbody td { padding:9px 12px; vertical-align:middle; border-color:#f0f0f0; }
+.table-card .table tbody tr:hover { background:#fafbfd; }
+
+/* ─── Badges ─── */
+.badge-month { background:#e8f0fe; color:#1967d2; font-size:.72rem; padding:3px 7px; border-radius:5px; }
+.badge-format { background:#e6f4ea; color:#1e8e3e; font-size:.72rem; padding:3px 7px; border-radius:5px; }
+.badge-billed { background:#fce8e6; color:#d93025; font-size:.72rem; padding:3px 7px; border-radius:5px; }
+.badge-open { background:#e8f5e9; color:#2e7d32; font-size:.72rem; padding:3px 7px; border-radius:5px; }
+.badge-notyet { background:#f5f5f5; color:#999; font-size:.72rem; padding:3px 7px; border-radius:5px; }
+
+/* ─── Schedule Cards ─── */
+.schedule-date-header {
+  background: #2f5496; color:#fff; padding:10px 16px;
+  border-radius:8px; font-weight:700; margin-bottom:8px; font-size:.9rem;
+  display:flex; align-items:center; gap:10px;
+}
+.schedule-item {
+  background:#fff; border-radius:8px; padding:12px 16px;
+  margin-bottom:6px; box-shadow:0 1px 3px rgba(0,0,0,.07);
+  border-left:4px solid #2f5496; display:flex; gap:12px; align-items:flex-start;
+}
+.schedule-item .time { font-size:.75rem; color:#888; min-width:60px; padding-top:2px; }
+.schedule-item .title { font-size:.88rem; font-weight:600; color:#1a2340; margin-bottom:2px; }
+.schedule-item .meta { font-size:.76rem; color:#888; }
+
+/* ─── Login Page ─── */
+.login-wrap {
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(135deg, #1a2340 0%, #2f5496 100%);
+}
+.login-box {
+  background:#fff; border-radius:16px; padding:40px 36px;
+  width:380px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,.2);
+}
+.login-logo { text-align:center; margin-bottom:28px; }
+.login-logo h4 { font-weight:800; color:#1a2340; margin:8px 0 0; }
+.login-logo small { color:#888; font-size:.8rem; }
+
+/* ─── Form Styles ─── */
+.form-section { background:#fff; border-radius:12px; padding:20px 22px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.form-section-title { font-size:.8rem; font-weight:700; color:#2f5496; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; padding-bottom:8px; border-bottom:2px solid #e8f0fe; }
+.form-label { font-size:.8rem; font-weight:600; color:#555; margin-bottom:3px; }
+.form-control, .form-select { font-size:.84rem; border-color:#ddd; }
+.form-control:focus, .form-select:focus { border-color:#2f5496; box-shadow:0 0 0 .2rem rgba(47,84,150,.15); }
+
+/* ─── Price Table ─── */
+.price-category { margin-bottom:24px; }
+.price-category h6 { font-size:.78rem; font-weight:700; color:#2f5496; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; }
+.price-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f5f5f5; }
+.price-row:last-child { border-bottom:none; }
+.price-name { flex:1; font-size:.84rem; font-weight:500; }
+.price-input { width:130px; text-align:right; }
+.price-unit { font-size:.8rem; color:#888; min-width:50px; }
+
+/* ─── Billing ─── */
+.billing-summary {
+  background: linear-gradient(135deg, #1a2340, #2f5496);
+  color:#fff; border-radius:12px; padding:20px 22px; margin-bottom:20px;
+}
+.billing-summary .amount { font-size:2rem; font-weight:800; }
+
+/* ─── Document Gen ─── */
+.doc-card {
+  background:#fff; border-radius:12px; padding:18px 20px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07); margin-bottom:12px;
+  display:flex; align-items:center; gap:16px;
+}
+.doc-icon { width:44px; height:44px; border-radius:10px; background:#e8f0fe; display:flex; align-items:center; justify-content:center; font-size:1.3rem; color:#2f5496; flex-shrink:0; }
+
+/* ─── Progress bars ─── */
+.progress { height:6px; border-radius:4px; background:#eee; }
+.progress-bar { background:#2f5496; border-radius:4px; }
+
+/* ─── Pagination ─── */
+.pagination .page-link { font-size:.82rem; padding:5px 11px; color:#2f5496; border-color:#e0e0e0; }
+.pagination .page-item.active .page-link { background:#2f5496; border-color:#2f5496; }
+
+/* ─── Responsive ─── */
+@media (max-width:768px) {
+  #sidebar { width:200px; }
+  .content-area { padding:16px; }
+}

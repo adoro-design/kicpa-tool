@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}대시보드{% endblock %}
+{% block page_title %}{{ year }}년 콘텐츠 개발 현황{% endblock %}
+{% block content %}
+<div class="d-flex gap-2 mb-4">
+  {% for y in [2025,2026,2027] %}
+  <a href="/?year={{ y }}" class="btn btn-sm {% if y == year %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ y }}년</a>
+  {% endfor %}
+</div>
+<div class="row g-3 mb-4">
+  {% for s in [
+    ('bi-collection','전체 콘텐츠', total, '#1a56db'),
+    ('bi-camera-video','촬영 완료', shot, '#0891b2'),
+    ('bi-play-circle','오픈 완료', opened, '#059669'),
+    ('bi-receipt','비용 청구', billed, '#d97706')
+  ] %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card d-flex justify-content-between align-items-center">
+      <div>
+        <div class="stat-num" style="color:{{ s[3] }}">{{ s[2] }}</div>
+        <div class="stat-label">{{ s[1] }}</div>
+      </div>
+      <i class="{{ s[0] }} stat-icon" style="color:{{ s[3] }}"></i>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div class="row g-3">
+  <div class="col-md-7">
+    <div class="table-card">
+      <div class="p-3 border-bottom fw-bold" style="font-size:14px">&#128196; 부서별 현황</div>
+      <table class="table table-hover">
+        <thead><tr><th>담당부서</th><th class="text-center">전체</th><th class="text-center">촬영완료</th><th class="text-center">오픈</th><th class="text-center">진행률</th></tr></thead>
+        <tbody>
+        {% for d in dept_summary %}
+        <tr>
+          <td><span class="badge bg-light text-dark border">{{ d.department }}</span></td>
+          <td class="text-center fw-bold">{{ d.total }}</td>
+          <td class="text-center">{{ d.shot }}</td>
+          <td class="text-center">{{ d.opened }}</td>
+          <td style="min-width:100px">
+            {% set pct = ((d.opened / d.total) * 100)|int if d.total > 0 else 0 %}
+            <div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:{{ pct }}%"></div></div>
+            <small class="text-muted">{{ pct }}%</small>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="table-card">
+      <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+        <span class="fw-bold" style="font-size:14px">&#128337; 최근 등록 콘텐츠</span>
+        <a href="/contents?year={{ year }}" class="btn btn-sm btn-outline-primary">전체 보기</a>
+      </div>
+      <div style="max-height:360px;overflow-y:auto">
+        <table class="table table-hover">
+          <tbody>
+          {% for r in recent %}
+          <tr>
+            <td>
+              <div style="font-size:12px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.course_name|clean_name }}</div>
+              <div class="text-muted" style="font-size:11px">{{ r.department }} · {{ r.shooting_format or '-' }}</div>
+            </td>
+            <td class="text-end">
+              {% if r.billing %}<span class="badge bg-success">{{ r.billing }}</span>
+              {% else %}<span class="badge bg-light text-dark">미청구</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
