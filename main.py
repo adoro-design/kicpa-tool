@@ -29,7 +29,7 @@ def require_login(request: Request):
     if not get_user(request): raise HTTPException(status_code=302, headers={"Location": "/login"})
 def require_admin(request: Request):
     u = get_user(request)
-    if not u or u["role"] \!= "admin": raise HTTPException(status_code=403, detail="권한 없음")
+    if not u or u["role"] != "admin": raise HTTPException(status_code=403, detail="권한 없음")
 
 def fmt_date(d): return d.strftime("%Y.%m.%d") if d else ""
 def clean_name(name): return re.sub(r'\[.*?\]', '', (name or '').split('\n')[0]).strip()
@@ -66,21 +66,11 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
     require_login(request)
     base = db.query(Content).filter_by(year=year)
     total   = base.count()
-    shot    = base.filter(Content.shooting_date \!= None).count()
-    opened  = base.filter(Content.open_date \!= None).count()
-    billed  = base.filter(Content.billing \!= None, Content.billing \!= "").count()
+    shot    = base.filter(Content.shooting_date != None).count()
+    opened  = base.filter(Content.open_date != None).count()
+    billed  = base.filter(Content.billing != None, Content.billing != "").count()
 
-    dept_stats = (db.query(Content.department,
-                           func.count().label("total"),
-                           func.sum((Content.shooting_date \!= None).cast(type_=db.bind.dialect.name == 'sqlite' and None or None)).label("shot"),
-                           func.sum((Content.open_date \!= None).cast(type_=None)).label("opened"))
-                  .filter_by(year=year)
-                  .filter(Content.department \!= None)
-                  .group_by(Content.department)
-                  .all())
-
-    # 부서별 통계 (간단 버전)
-    depts_raw = db.query(Content.department).filter_by(year=year).filter(Content.department \!= None).distinct().all()
+    depts_raw = db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().all()
     dept_list = [d[0] for d in depts_raw]
     dept_summary = []
     for dept in dept_list:
@@ -88,8 +78,8 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
         dept_summary.append({
             "department": dept,
             "total": q.count(),
-            "shot": q.filter(Content.shooting_date \!= None).count(),
-            "opened": q.filter(Content.open_date \!= None).count(),
+            "shot": q.filter(Content.shooting_date != None).count(),
+            "opened": q.filter(Content.open_date != None).count(),
         })
     dept_summary.sort(key=lambda x: x["total"], reverse=True)
 
@@ -111,15 +101,15 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
     if dept:    q = q.filter_by(department=dept)
     if month:   q = q.filter_by(shooting_month=month)
     if fmt:     q = q.filter(Content.shooting_format.ilike(f"%{fmt}%"))
-    if billing == "Y": q = q.filter(Content.billing \!= None, Content.billing \!= "")
+    if billing == "Y": q = q.filter(Content.billing != None, Content.billing != "")
     if billing == "N": q = q.filter(or_(Content.billing == None, Content.billing == ""))
     if search:  q = q.filter(Content.course_name.ilike(f"%{search}%"))
     total = q.count()
     rows  = q.order_by(Content.id).offset((page-1)*per).limit(per).all()
     total_pages = (total + per - 1) // per
 
-    depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department\!=None).distinct().order_by(Content.department).all()]
-    formats = [f[0] for f in db.query(Content.shooting_format).filter_by(year=year).filter(Content.shooting_format\!=None).distinct().all()]
+    depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
+    formats = [f[0] for f in db.query(Content.shooting_format).filter_by(year=year).filter(Content.shooting_format != None).distinct().all()]
     return templates.TemplateResponse("contents.html", {
         "request": request, "user": get_user(request),
         "year": year, "rows": rows, "total": total, "page": page, "total_pages": total_pages,
@@ -147,7 +137,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     billing: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
-    def to_date(s): 
+    def to_date(s):
         try: return date.fromisoformat(s) if s else None
         except: return None
     def to_int(s):
@@ -178,7 +168,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
 @app.get("/schedule", response_class=HTMLResponse)
 def schedule(request: Request, year: int = 2026, month: str = "", dept: str = "", db: Session = Depends(get_db)):
     require_login(request)
-    q = db.query(Content).filter_by(year=year).filter(Content.shooting_date \!= None)
+    q = db.query(Content).filter_by(year=year).filter(Content.shooting_date != None)
     if month: q = q.filter_by(shooting_month=month)
     if dept:  q = q.filter_by(department=dept)
     rows = q.order_by(Content.shooting_date).all()
@@ -186,7 +176,7 @@ def schedule(request: Request, year: int = 2026, month: str = "", dept: str = ""
     for r in rows:
         key = r.shooting_date.isoformat()
         grouped.setdefault(key, []).append(r)
-    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department\!=None).distinct().order_by(Content.department).all()]
+    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
     return templates.TemplateResponse("schedule.html", {
         "request": request, "user": get_user(request),
         "year": year, "grouped": grouped, "month": month, "dept": dept, "depts": depts,
@@ -203,7 +193,7 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
     q = db.query(Content).filter_by(year=year)
     if dept:    q = q.filter_by(department=dept)
     if month:   q = q.filter_by(shooting_month=month)
-    if billing == "Y": q = q.filter(Content.billing \!= None, Content.billing \!= "")
+    if billing == "Y": q = q.filter(Content.billing != None, Content.billing != "")
     if billing == "N": q = q.filter(or_(Content.billing == None, Content.billing == ""))
     if search:  q = q.filter(Content.course_name.ilike(f"%{search}%"))
     rows = q.order_by(Content.id).all()
@@ -337,7 +327,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         summary[d]["total"] += p
         if r.billing: summary[d]["billed"] += p
 
-    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department\!=None).distinct().order_by(Content.department).all()]
+    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
     return templates.TemplateResponse("billing.html", {
         "request": request, "user": get_user(request),
         "year": year, "contents": contents, "summary": summary,
@@ -354,7 +344,6 @@ def price_table_page(request: Request, db: Session = Depends(get_db)):
 @app.post("/price_table/update")
 def price_table_update(request: Request, db: Session = Depends(get_db)):
     require_admin(request)
-    # Form 데이터 직접 파싱
     return RedirectResponse("/price_table", 302)
 
 # ── 사용자 관리 (관리자) ──────────────────────────
@@ -379,7 +368,7 @@ def users_toggle(request: Request, user_id: int=Form(...), db: Session = Depends
     require_admin(request)
     u = db.query(User).filter_by(id=user_id).first()
     current_user = get_user(request)
-    if u and u.id \!= current_user["id"]:
+    if u and u.id != current_user["id"]:
         u.is_active = not u.is_active
         db.commit()
     return RedirectResponse("/users", 302)
@@ -397,12 +386,12 @@ def users_change_pw(request: Request, user_id: int=Form(...), new_password: str=
 @app.get("/documents", response_class=HTMLResponse)
 def documents_page(request: Request, year: int = 2026, dept: str = "", db: Session = Depends(get_db)):
     require_admin(request)
-    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department\!=None).distinct().order_by(Content.department).all()]
+    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
     q = db.query(Content.department,
                  func.count().label("total"),
                  func.sum(Content.session_count).label("sessions"),
                  func.sum(Content.chapter_count).label("chapters"))\
-        .filter_by(year=year).filter(Content.department\!=None)
+        .filter_by(year=year).filter(Content.department != None)
     if dept: q = q.filter_by(department=dept)
     dept_summary = q.group_by(Content.department).order_by(Content.department).all()
     history = db.query(Document).order_by(Document.created_at.desc()).limit(20).all()
