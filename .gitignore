@@ -1,0 +1,22 @@
+# 환경 설정 (서버마다 다름 - Git에 올리지 않음)
+config.php
+
+# Composer 라이브러리 (서버에서 직접 설치)
+vendor/
+
+# 업로드/생성 파일
+uploads/*
+generated/*
+\!uploads/.gitkeep
+\!generated/.gitkeep
+
+# 보안상 제외
+setup.php
+install.php
+composer.phar
+
+# 임시 파일
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

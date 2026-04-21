@@ -1,0 +1,8 @@
+Options -Indexes
+<FilesMatch "^(config\.php|install\.php)$">
+  Order allow,deny
+  Allow from all
+</FilesMatch>
+<FilesMatch "\.php$">
+  php_flag display_errors Off
+</FilesMatch>
