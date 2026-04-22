@@ -87,6 +87,8 @@ class Document(Base):
 
 def init_db():
     """테이블 생성 + 기본 데이터"""
+    if os.getenv("RESET_DB") == "true":
+        Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
