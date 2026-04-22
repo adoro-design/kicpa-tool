@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, Date, SmallInteger, Enum, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, Date, SmallInteger, DateTime, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import func
 import os
@@ -29,7 +29,7 @@ class User(Base):
     username   = Column(String(50), unique=True, nullable=False)
     password   = Column(String(255), nullable=False)
     name       = Column(String(100), nullable=False)
-    role       = Column(Enum("admin", "director"), default="director")
+    role       = Column(String(20), default="director")
     is_active  = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -68,7 +68,7 @@ class Content(Base):
 class PriceTable(Base):
     __tablename__ = "kicpa_price_table"
     id         = Column(Integer, primary_key=True, index=True)
-    category   = Column(Enum("new_dev", "porting", "travel"), nullable=False)
+    category   = Column(String(20), nullable=False)
     type_name  = Column(String(100), nullable=False)
     unit_price = Column(Integer)
     unit       = Column(String(20))
@@ -78,7 +78,7 @@ class PriceTable(Base):
 class Document(Base):
     __tablename__ = "kicpa_documents"
     id         = Column(Integer, primary_key=True, index=True)
-    doc_type   = Column(Enum("request","attachment","profit","profile","studio"), nullable=False)
+    doc_type   = Column(String(20), nullable=False)
     department = Column(String(100))
     period     = Column(String(50))
     file_path  = Column(String(500))
@@ -94,7 +94,7 @@ def init_db():
         if not db.query(User).first():
             from passlib.context import CryptContext
             pwd = CryptContext(schemes=["bcrypt"])
-            db.add(User(username="admin", password=pwd.hash("kicpa1234\!"), name="관리자", role="admin"))
+            db.add(User(username="admin", password=pwd.hash("kicpa1234!"), name="관리자", role="admin"))
             db.commit()
         # 단가 데이터
         if not db.query(PriceTable).first():
