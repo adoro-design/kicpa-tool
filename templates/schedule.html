@@ -22,7 +22,7 @@
 </form>
 
 {% if grouped %}
-  {% for shoot_date in grouped|sort %}
+  {% for shoot_date in grouped|sort(reverse=true) %}
   {% set items = grouped[shoot_date] %}
   <div class="schedule-date-header">
     <i class="bi-camera-video-fill"></i>
