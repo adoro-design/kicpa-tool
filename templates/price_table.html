@@ -120,7 +120,7 @@
       <tr>
         <td><span style="font-size:.72rem; color:#888;">{{ p.category }}</span></td>
         <td>{{ p.type_name }}</td>
-        <td class="text-end font-monospace">{{ "{:,}".format(p.unit_price) }}원</td>
+        <td class="text-end font-monospace">{% if p.unit_price is not none %}{{ "{:,}".format(p.unit_price) }}원{% else %}별도 협의{% endif %}</td>
         <td>{{ p.unit }}</td>
         <td>{% if p.is_active %}<span class="badge bg-success" style="font-size:.7rem;">사용중</span>{% else %}<span class="badge bg-secondary" style="font-size:.7rem;">미사용</span>{% endif %}</td>
       </tr>
