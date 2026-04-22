@@ -385,9 +385,41 @@ def price_table_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("price_table.html", {"request": request, "user": get_user(request), "prices": prices, "msg": ""})
 
 @app.post("/price_table/update")
-def price_table_update(request: Request, db: Session = Depends(get_db)):
+async def price_table_update(request: Request, db: Session = Depends(get_db)):
     require_admin(request)
-    return RedirectResponse("/price_table", 302)
+    form = await request.form()
+    # 기존 항목 단가/활성여부 업데이트
+    for key, val in form.items():
+        if key.startswith("price_"):
+            pid = int(key.split("_", 1)[1])
+            p = db.query(PriceTable).filter_by(id=pid).first()
+            if p:
+                try: p.unit_price = int(val) if val else None
+                except: p.unit_price = None
+                p.is_active = f"active_{pid}" in form
+    db.commit()
+    return RedirectResponse("/price_table?msg=saved", 302)
+
+@app.post("/price_table/add")
+async def price_table_add(request: Request,
+    category: str = Form(""), type_name: str = Form(""),
+    unit_price: str = Form(""), unit: str = Form(""), note: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    if category and type_name:
+        db.add(PriceTable(
+            category=category, type_name=type_name,
+            unit_price=int(unit_price) if unit_price else None,
+            unit=unit or None, note=note or None, is_active=True))
+        db.commit()
+    return RedirectResponse("/price_table?msg=added", 302)
+
+@app.post("/price_table/delete/{pid}")
+def price_table_delete(request: Request, pid: int, db: Session = Depends(get_db)):
+    require_admin(request)
+    db.query(PriceTable).filter_by(id=pid).delete()
+    db.commit()
+    return RedirectResponse("/price_table?msg=deleted", 302)
 
 # ── 사용자 관리 (관리자) ──────────────────────────
 @app.get("/users", response_class=HTMLResponse)
