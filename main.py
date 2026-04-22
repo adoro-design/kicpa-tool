@@ -353,7 +353,18 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     q = db.query(Content).filter_by(year=year)
     if month: q = q.filter_by(billing_month=month)
     if dept:  q = q.filter_by(department=dept)
-    contents = q.order_by(Content.billing_month, Content.department).all()
+    from sqlalchemy import text as sa_text
+    billing_month_sort = case(
+        {m: i for i, m in enumerate(MONTHS)},
+        value=Content.billing_month, else_=99)
+    date_sort = sa_text(
+        "COALESCE(shooting_date, "
+        "  CASE WHEN video_marking ~ '^[0-9]{4}[./-][0-9]' "
+        "  THEN TO_DATE(SUBSTRING(REPLACE(REPLACE(video_marking,'.', '-'),'/','-'),1,10),'YYYY-MM-DD') "
+        "  ELSE NULL END"
+        ") DESC NULLS LAST"
+    )
+    contents = q.order_by(billing_month_sort.desc(), date_sort, Content.id.desc()).all()
 
     price_tbl = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(is_active=True).all()}
 
