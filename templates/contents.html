@@ -70,7 +70,6 @@
             <td>
               <div style="max-width:260px; font-weight:500; font-size:.84rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
                    title="{{ r.course_name }}">{{ r.course_name | clean_name }}</div>
-              {% if r.required_optional %}<small class="text-muted">{{ r.required_optional }}</small>{% endif %}
             </td>
             <td style="font-size:.83rem;">{{ r.department or '-' }}</td>
             <td class="text-center">{{ r.session_count or '-' }}</td>

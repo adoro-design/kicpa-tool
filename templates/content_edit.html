@@ -30,26 +30,6 @@
         <label class="form-label">과정명 <span class="text-danger">*</span></label>
         <input type="text" name="course_name" class="form-control" value="{{ row.course_name or '' }}" required>
       </div>
-      <div class="col-md-2">
-        <label class="form-label">필수/선택</label>
-        <select name="required_optional" class="form-select">
-          <option value="">선택</option>
-          <option value="필수" {% if row and row.required_optional=='필수' %}selected{% endif %}>필수</option>
-          <option value="선택" {% if row and row.required_optional=='선택' %}selected{% endif %}>선택</option>
-        </select>
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">카테고리</label>
-        <input type="text" name="category" class="form-control" value="{{ row.category or '' }}">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">원코드</label>
-        <input type="text" name="original_code" class="form-control" value="{{ row.original_code or '' }}">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">과정코드</label>
-        <input type="text" name="course_code" class="form-control" value="{{ row.course_code or '' }}">
-      </div>
       <div class="col-md-3">
         <label class="form-label">차시수</label>
         <input type="number" name="session_count" class="form-control" value="{{ row.session_count or '' }}">
@@ -106,45 +86,13 @@
         <label class="form-label">장소</label>
         <input type="text" name="location" class="form-control" value="{{ row.location or '' }}">
       </div>
-      <div class="col-md-3">
-        <label class="form-label">촬영동의서</label>
-        <select name="filming_consent" class="form-select">
-          <option value="">선택</option>
-          <option value="완료" {% if row and row.filming_consent=='완료' %}selected{% endif %}>완료</option>
-          <option value="미수령" {% if row and row.filming_consent=='미수령' %}selected{% endif %}>미수령</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">교안수급</label>
-        <select name="materials_supply" class="form-select">
-          <option value="">선택</option>
-          <option value="완료" {% if row and row.materials_supply=='완료' %}selected{% endif %}>완료</option>
-          <option value="미수령" {% if row and row.materials_supply=='미수령' %}selected{% endif %}>미수령</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">동영상 마킹</label>
-        <input type="text" name="video_marking" class="form-control" value="{{ row.video_marking or '' }}">
-      </div>
     </div>
   </div>
 
-  <!-- 퀴즈 -->
+  <!-- 일정 -->
   <div class="form-section">
-    <div class="form-section-title">퀴즈 및 일정</div>
+    <div class="form-section-title">일정</div>
     <div class="row g-3">
-      <div class="col-md-3">
-        <label class="form-label">퀴즈 유무</label>
-        <select name="has_quiz" class="form-select">
-          <option value="">선택</option>
-          <option value="Y" {% if row and row.has_quiz=='Y' %}selected{% endif %}>Y</option>
-          <option value="N" {% if row and row.has_quiz=='N' %}selected{% endif %}>N</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">퀴즈 문항수</label>
-        <input type="number" name="quiz_count" class="form-control" value="{{ row.quiz_count or '' }}">
-      </div>
       <div class="col-md-3">
         <label class="form-label">개발(외주) 완료일</label>
         <input type="date" name="dev_outsource_date" class="form-control" value="{{ row.dev_outsource_date.isoformat() if row and row.dev_outsource_date else '' }}">
