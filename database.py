@@ -121,12 +121,22 @@ def init_db():
                 PriceTable(category="new_dev", type_name="FullVod (출장)",   unit_price=500000, unit="차시"),
                 PriceTable(category="new_dev", type_name="태블릿형",         unit_price=500000, unit="차시"),
                 PriceTable(category="new_dev", type_name="전자칠판형",       unit_price=500000, unit="차시"),
-                PriceTable(category="porting", type_name="포팅 (동영상 무편집)", unit_price=50000, unit="챕터"),
-                PriceTable(category="porting", type_name="포팅 (동영상 편집)",  unit_price=160000, unit="챕터"),
+                PriceTable(category="porting", type_name="포팅",            unit_price=50000,  unit="챕터"),
+                PriceTable(category="porting", type_name="편집포팅",         unit_price=160000, unit="챕터"),
                 PriceTable(category="travel",  type_name="1 ~ 4시간",        unit_price=100000, unit="시간"),
                 PriceTable(category="travel",  type_name="4시간 초과",        unit_price=None,   unit="시간", note="별도 협의"),
             ]
             db.add_all(prices)
             db.commit()
+        # 단가 항목명 업데이트 (기존 데이터 문구 수정)
+        renames = {
+            "포팅 (동영상 무편집)": "포팅",
+            "포팅 (동영상 편집)":  "편집포팅",
+        }
+        for old_name, new_name in renames.items():
+            p = db.query(PriceTable).filter_by(type_name=old_name).first()
+            if p:
+                p.type_name = new_name
+        db.commit()
     finally:
         db.close()
