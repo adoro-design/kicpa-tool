@@ -126,11 +126,18 @@
           {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.billing_month==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label">별도 단가 <small class="text-muted">(원/차시, VAT별도)</small></label>
         <input type="number" name="custom_price" class="form-control" step="1000"
                placeholder="단가표 적용 시 공란"
                value="{{ row.custom_price if row and row.custom_price is not none else '' }}">
+      </div>
+      <div class="col-md-3" id="travel_expense_wrap"
+           style="display:{% if row and row.shooting_format and '출장' in row.shooting_format %}block{% else %}none{% endif %}">
+        <label class="form-label">출장비 <small class="text-muted">(기본 100,000원, 4시간 초과 시 직접 입력)</small></label>
+        <input type="number" name="travel_expense" class="form-control" step="10000"
+               placeholder="기본 100,000원"
+               value="{{ row.travel_expense if row and row.travel_expense is not none else '' }}">
       </div>
     </div>
   </div>
@@ -146,4 +153,15 @@
     <button type="submit" class="btn btn-primary"><i class="bi-save me-1"></i>저장</button>
   </div>
 </form>
+
+{% block scripts %}
+<script>
+  const fmtSelect = document.querySelector('select[name="shooting_format"]');
+  const travelWrap = document.getElementById('travel_expense_wrap');
+  function toggleTravel() {
+    travelWrap.style.display = fmtSelect.value.includes('출장') ? 'block' : 'none';
+  }
+  fmtSelect.addEventListener('change', toggleTravel);
+</script>
+{% endblock %}
 {% endblock %}

@@ -151,7 +151,8 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     shooting_format: str=Form(""), location: str=Form(""), has_quiz: str=Form(""),
     quiz_count: str=Form(""), materials_supply: str=Form(""), video_marking: str=Form(""),
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
-    billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
+    billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""),
+    travel_expense: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
     def to_date(s):
@@ -174,7 +175,8 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         dev_outsource_date=to_date(dev_outsource_date), inspection_date=to_date(inspection_date),
         open_date=to_date(open_date), billing=billing or None,
         billing_month=billing_month or None,
-        custom_price=to_int(custom_price), notes=notes or None)
+        custom_price=to_int(custom_price),
+        travel_expense=to_int(travel_expense), notes=notes or None)
 
     if id:
         db.query(Content).filter_by(id=id).update(data)
@@ -385,11 +387,22 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
             if k in fmt: return v or 0
         return 0
 
+    # 출장비 기본값 (단가표 travel 카테고리 "1 ~ 4시간")
+    default_travel = price_tbl.get("1 ~ 4시간", 100000)
+
     def get_unit_price(content_row):
         """별도 단가 우선, 없으면 단가표에서 촬영형식으로 조회"""
         if content_row.custom_price:
             return content_row.custom_price
         return match_price(content_row.shooting_format or "")
+
+    def get_travel_expense(content_row):
+        """출장 과정의 출장비: 직접 입력값 우선, 없으면 기본 100,000원"""
+        if not content_row.shooting_format or "출장" not in content_row.shooting_format:
+            return 0
+        if content_row.travel_expense is not None:
+            return content_row.travel_expense
+        return default_travel
 
     # billing 템플릿 하위 호환용
     def get_price(fmt):
@@ -399,7 +412,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     for r in contents:
         d = r.department or "미지정"
         if d not in summary: summary[d] = {"count":0,"sessions":0,"total":0,"billed":0}
-        p = get_unit_price(r) * (r.session_count or 0)
+        p = get_unit_price(r) * (r.session_count or 0) + get_travel_expense(r)
         summary[d]["count"] += 1
         summary[d]["sessions"] += r.session_count or 0
         summary[d]["total"] += p
@@ -415,6 +428,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         "month": month, "dept": dept, "depts": depts,
         "billing_months": billing_months,
         "get_price": get_price, "get_unit_price": get_unit_price,
+        "get_travel_expense": get_travel_expense,
     })
 
 # ── 단가표 관리 (관리자) ──────────────────────────
