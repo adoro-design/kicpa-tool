@@ -356,22 +356,30 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     contents = q.order_by(Content.billing_month, Content.department).all()
 
     price_tbl = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(is_active=True).all()}
+
+    def match_price(fmt):
+        """촬영형식 문자열로 단가표 단가 조회 (포팅/편집포팅 우선 분기)"""
+        if not fmt: return 0
+        # 포팅 계열은 편집 여부로 먼저 분기
+        if "포팅" in fmt:
+            if "편집" in fmt:
+                return price_tbl.get("편집포팅", 0) or 0
+            else:
+                return price_tbl.get("포팅", 0) or 0
+        # 그 외: 단가표 type_name이 촬영형식에 포함되는지 확인
+        for k, v in price_tbl.items():
+            if k in fmt: return v or 0
+        return 0
+
     def get_unit_price(content_row):
         """별도 단가 우선, 없으면 단가표에서 촬영형식으로 조회"""
         if content_row.custom_price:
             return content_row.custom_price
-        fmt = content_row.shooting_format or ""
-        if not fmt: return 0
-        for k, v in price_tbl.items():
-            if k.replace(" (출장)","") in fmt or k in fmt: return v or 0
-        return 0
+        return match_price(content_row.shooting_format or "")
 
-    # billing 템플릿 하위 호환용 (단가만 반환)
+    # billing 템플릿 하위 호환용
     def get_price(fmt):
-        if not fmt: return 0
-        for k, v in price_tbl.items():
-            if k.replace(" (출장)","") in fmt or k in fmt: return v or 0
-        return 0
+        return match_price(fmt or "")
 
     summary = {}
     for r in contents:
