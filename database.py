@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, Date, SmallInteger, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, Date, SmallInteger, DateTime, Boolean, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import func
 import os
@@ -61,6 +61,7 @@ class Content(Base):
     inspection_date     = Column(Date)
     open_date           = Column(Date)
     billing             = Column(String(100))
+    custom_price        = Column(Integer)          # 별도 단가 (단가표 우선 적용)
     notes               = Column(Text)
     created_at          = Column(DateTime, server_default=func.now())
     updated_at          = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -90,6 +91,18 @@ def init_db():
     if os.getenv("RESET_DB") == "true":
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+    # 신규 컬럼 자동 추가 마이그레이션 (이미 있으면 무시)
+    with engine.connect() as conn:
+        for col_def in [
+            "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
+        ]:
+            try:
+                conn.execute(text(col_def))
+                conn.commit()
+            except Exception:
+                pass  # 이미 컬럼 존재
+
     db = SessionLocal()
     try:
         # 관리자 계정

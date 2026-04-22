@@ -99,7 +99,7 @@
       <tbody>
         {% set total_amt = namespace(val=0) %}
         {% for r in contents %}
-        {% set price = get_price(r.shooting_format or '') %}
+        {% set price = get_unit_price(r) %}
         {% set amt = price * (r.session_count or 0) %}
         {% set total_amt.val = total_amt.val + amt %}
         <tr>
@@ -114,7 +114,10 @@
           <td class="text-center">{{ r.chapter_count or '-' }}</td>
           <td>{% if r.shooting_format %}<span class="badge-format">{{ r.shooting_format }}</span>{% else %}-{% endif %}</td>
           <td class="text-end" style="font-size:.83rem;">
-            {% if price %}{{ "{:,}".format(price) }}원{% else %}-{% endif %}
+            {% if price %}
+              {{ "{:,}".format(price) }}원
+              {% if r.custom_price %}<br><span style="font-size:.7rem; color:#e67700;" title="별도 단가 적용">★별도</span>{% endif %}
+            {% else %}-{% endif %}
           </td>
           <td class="text-end" style="font-size:.84rem; font-weight:{% if amt %}600{% else %}400{% endif %};">
             {% if amt %}{{ "{:,}".format(amt) }}원{% else %}-{% endif %}

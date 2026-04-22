@@ -139,7 +139,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     shooting_format: str=Form(""), location: str=Form(""), has_quiz: str=Form(""),
     quiz_count: str=Form(""), materials_supply: str=Form(""), video_marking: str=Form(""),
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
-    billing: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
+    billing: str=Form(""), custom_price: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
     def to_date(s):
@@ -160,7 +160,8 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         has_quiz=has_quiz or None, quiz_count=to_int(quiz_count),
         materials_supply=materials_supply or None, video_marking=video_marking or None,
         dev_outsource_date=to_date(dev_outsource_date), inspection_date=to_date(inspection_date),
-        open_date=to_date(open_date), billing=billing or None, notes=notes or None)
+        open_date=to_date(open_date), billing=billing or None,
+        custom_price=to_int(custom_price), notes=notes or None)
 
     if id:
         db.query(Content).filter_by(id=id).update(data)
@@ -338,10 +339,21 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     if dept:  q = q.filter_by(department=dept)
     contents = q.order_by(Content.shooting_month, Content.department).all()
 
-    prices = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(category="new_dev", is_active=True).all()}
+    price_tbl = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(is_active=True).all()}
+    def get_unit_price(content_row):
+        """별도 단가 우선, 없으면 단가표에서 촬영형식으로 조회"""
+        if content_row.custom_price:
+            return content_row.custom_price
+        fmt = content_row.shooting_format or ""
+        if not fmt: return 0
+        for k, v in price_tbl.items():
+            if k.replace(" (출장)","") in fmt or k in fmt: return v or 0
+        return 0
+
+    # billing 템플릿 하위 호환용 (단가만 반환)
     def get_price(fmt):
         if not fmt: return 0
-        for k, v in prices.items():
+        for k, v in price_tbl.items():
             if k.replace(" (출장)","") in fmt or k in fmt: return v or 0
         return 0
 
@@ -349,7 +361,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     for r in contents:
         d = r.department or "미지정"
         if d not in summary: summary[d] = {"count":0,"sessions":0,"total":0,"billed":0}
-        p = get_price(r.shooting_format or "") * (r.session_count or 0)
+        p = get_unit_price(r) * (r.session_count or 0)
         summary[d]["count"] += 1
         summary[d]["sessions"] += r.session_count or 0
         summary[d]["total"] += p
@@ -359,7 +371,8 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     return templates.TemplateResponse("billing.html", {
         "request": request, "user": get_user(request),
         "year": year, "contents": contents, "summary": summary,
-        "month": month, "dept": dept, "depts": depts, "get_price": get_price,
+        "month": month, "dept": dept, "depts": depts,
+        "get_price": get_price, "get_unit_price": get_unit_price,
     })
 
 # ── 단가표 관리 (관리자) ──────────────────────────

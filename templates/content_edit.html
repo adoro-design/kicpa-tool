@@ -164,6 +164,12 @@
           <option value="Y" {% if row and row.billing=='Y' %}selected{% endif %}>청구완료</option>
         </select>
       </div>
+      <div class="col-md-3">
+        <label class="form-label">별도 단가 <small class="text-muted">(원/차시, 단가표 우선 적용)</small></label>
+        <input type="number" name="custom_price" class="form-control" step="1000"
+               placeholder="단가표 적용 시 공란"
+               value="{{ row.custom_price if row and row.custom_price is not none else '' }}">
+      </div>
     </div>
   </div>
 
