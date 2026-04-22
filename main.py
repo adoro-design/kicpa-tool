@@ -32,7 +32,12 @@ def require_admin(request: Request):
     if not u or u["role"] != "admin": raise HTTPException(status_code=403, detail="권한 없음")
 
 def fmt_date(d): return d.strftime("%Y.%m.%d") if d else ""
-def clean_name(name): return re.sub(r'\[.*?\]', '', (name or '').split('\n')[0]).strip()
+def clean_name(name):
+    if not name: return ''
+    for line in str(name).split('\n'):
+        cleaned = re.sub(r'\[.*?\]', '', line).strip()
+        if cleaned: return cleaned
+    return re.sub(r'\[.*?\]', '', str(name).replace('\n', ' ')).strip()
 
 templates.env.filters["fmt_date"] = fmt_date
 templates.env.filters["clean_name"] = clean_name
@@ -254,27 +259,50 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
             db.query(Content).filter_by(year=year).delete()
             db.commit()
 
+        def to_date(v):
+            if v is None: return None
+            if isinstance(v, (date,)): return v
+            try:
+                import datetime
+                if isinstance(v, datetime.datetime): return v.date()
+                if isinstance(v, str): return date.fromisoformat(v[:10])
+                if isinstance(v, (int, float)): return from_excel(v).date()
+            except: pass
+            return None
+
         prev_month = ""
         imported = 0
         for row in ws.iter_rows(min_row=4, values_only=True):
-            course_name = str(row[2] or "").strip()
-            if not course_name: continue
+            raw_name = str(row[2] or "").strip()
+            if not raw_name: continue
 
             month_val = str(row[1] or "").strip()
             if month_val: prev_month = month_val
 
-            def to_date(v):
-                if v is None: return None
-                if isinstance(v, (date,)): return v
-                try:
-                    import datetime
-                    if isinstance(v, datetime.datetime): return v.date()
-                    if isinstance(v, str): return date.fromisoformat(v[:10])
-                    if isinstance(v, (int, float)): return from_excel(v).date()
-                except: pass
-                return None
+            # 과정명 정리: ==> 기준으로 분리 후 대괄호 제거
+            name_parts = re.split(r'\s*\n*\s*==>', raw_name)
+            name_cleaned = ""
+            for line in name_parts[0].split('\n'):
+                cleaned = re.sub(r'\[.*?\]', '', line).strip()
+                if cleaned:
+                    name_cleaned = cleaned
+                    break
+            if not name_cleaned:
+                name_cleaned = re.sub(r'\[.*?\]', '', name_parts[0].replace('\n', ' ')).strip()
 
-            db.add(Content(year=year, shooting_month=prev_month or None,
+            # 비고: ==> 이후 내용 + 기존 엑셀 비고 병합
+            extra_note = ("==>" + name_parts[1].strip()) if len(name_parts) > 1 else ""
+            excel_note = str(row[25] or "").strip()
+            combined_notes = "\n".join(filter(None, [extra_note, excel_note])) or None
+
+            course_name = name_cleaned
+            if not course_name: continue
+
+            # 촬영날짜에서 월 자동 추출
+            shoot_date = to_date(row[13])
+            auto_month = f"{shoot_date.month}월" if shoot_date else prev_month
+
+            db.add(Content(year=year, shooting_month=auto_month or None,
                 course_name=course_name, required_optional=str(row[3] or "") or None,
                 original_code=str(row[4] or "") or None, category=str(row[5] or "") or None,
                 course_code=str(row[6] or "") or None,
@@ -282,14 +310,14 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 chapter_count=int(row[8]) if row[8] and str(row[8]).isdigit() else None,
                 instructor=str(row[9] or "") or None, department=str(row[10] or "") or None,
                 kicpa_manager=str(row[11] or "") or None, filming_consent=str(row[12] or "") or None,
-                shooting_date=to_date(row[13]), shooting_time=str(row[14] or "") or None,
+                shooting_date=shoot_date, shooting_time=str(row[14] or "") or None,
                 shooting_format=str(row[15] or "") or None, location=str(row[16] or "") or None,
                 has_quiz=str(row[17] or "") or None,
                 quiz_count=int(row[18]) if row[18] and str(row[18]).isdigit() else None,
                 materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
                 dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
                 open_date=to_date(row[23]), billing=str(row[24] or "") or None,
-                notes=str(row[25] or "") or None))
+                notes=combined_notes))
             imported += 1
 
         db.commit()
