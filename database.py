@@ -61,6 +61,7 @@ class Content(Base):
     inspection_date     = Column(Date)
     open_date           = Column(Date)
     billing             = Column(String(100))
+    billing_month       = Column(String(20))       # 비용청구 월 (엑셀 기준)
     custom_price        = Column(Integer)          # 별도 단가 (단가표 우선 적용)
     notes               = Column(Text)
     created_at          = Column(DateTime, server_default=func.now())
@@ -96,6 +97,7 @@ def init_db():
     with engine.connect() as conn:
         for col_def in [
             "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
+            "ALTER TABLE kicpa_contents ADD COLUMN billing_month VARCHAR(20)",
         ]:
             try:
                 conn.execute(text(col_def))

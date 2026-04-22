@@ -112,11 +112,18 @@
   <div class="form-section">
     <div class="form-section-title">비용 청구 여부 및 단가</div>
     <div class="row g-3">
-      <div class="col-md-3">
+      <div class="col-md-2">
         <label class="form-label">비용 청구</label>
         <select name="billing" class="form-select">
           <option value="">미청구</option>
           <option value="Y" {% if row and row.billing %}selected{% endif %}>청구완료</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">청구월</label>
+        <select name="billing_month" class="form-select">
+          <option value="">선택</option>
+          {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.billing_month==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-4">

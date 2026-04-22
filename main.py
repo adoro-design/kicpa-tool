@@ -148,7 +148,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     shooting_format: str=Form(""), location: str=Form(""), has_quiz: str=Form(""),
     quiz_count: str=Form(""), materials_supply: str=Form(""), video_marking: str=Form(""),
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
-    billing: str=Form(""), custom_price: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
+    billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
     def to_date(s):
@@ -170,6 +170,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         materials_supply=materials_supply or None, video_marking=video_marking or None,
         dev_outsource_date=to_date(dev_outsource_date), inspection_date=to_date(inspection_date),
         open_date=to_date(open_date), billing=billing or None,
+        billing_month=billing_month or None,
         custom_price=to_int(custom_price), notes=notes or None)
 
     if id:
@@ -302,7 +303,7 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
 
             # 비고: ==> 이후 내용 + 기존 엑셀 비고 병합
             extra_note = ("==>" + name_parts[1].strip()) if len(name_parts) > 1 else ""
-            excel_note = str(row[25] or "").strip()
+            excel_note = str(row[26] or "").strip()   # 비고: 비용청구 월 추가로 한 칸 밀림
             combined_notes = "\n".join(filter(None, [extra_note, excel_note])) or None
 
             course_name = name_cleaned
@@ -329,6 +330,7 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
                 dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
                 open_date=to_date(row[23]), billing=str(row[24] or "") or None,
+                billing_month=str(row[25] or "") or None,
                 notes=combined_notes))
             imported += 1
 
@@ -346,9 +348,9 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
 def billing_page(request: Request, year: int = 2026, month: str = "", dept: str = "", db: Session = Depends(get_db)):
     require_admin(request)
     q = db.query(Content).filter_by(year=year)
-    if month: q = q.filter_by(shooting_month=month)
+    if month: q = q.filter_by(billing_month=month)
     if dept:  q = q.filter_by(department=dept)
-    contents = q.order_by(Content.shooting_month, Content.department).all()
+    contents = q.order_by(Content.billing_month, Content.department).all()
 
     price_tbl = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(is_active=True).all()}
     def get_unit_price(content_row):
@@ -379,10 +381,14 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         if r.billing: summary[d]["billed"] += p
 
     depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
+    # 비용청구 월 목록 (실제 데이터 기준)
+    billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year).filter(Content.billing_month != None).distinct().all()]
+    billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
     return templates.TemplateResponse("billing.html", {
         "request": request, "user": get_user(request),
         "year": year, "contents": contents, "summary": summary,
         "month": month, "dept": dept, "depts": depts,
+        "billing_months": billing_months,
         "get_price": get_price, "get_unit_price": get_unit_price,
     })
 
