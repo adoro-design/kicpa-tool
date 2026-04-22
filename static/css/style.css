@@ -70,7 +70,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f2f5; color: #333
   display:flex; flex-wrap:wrap; gap:8px; align-items:center;
 }
 .filter-bar .form-select, .filter-bar .form-control {
-  font-size:.82rem; height:34px; padding:4px 10px; border-color:#ddd;
+  font-size:.82rem; height:34px; padding:4px 32px 4px 10px; border-color:#ddd;
 }
 .filter-bar .btn { font-size:.82rem; height:34px; padding:4px 14px; }
 
@@ -126,7 +126,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f2f5; color: #333
 .form-section { background:#fff; border-radius:12px; padding:20px 22px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.07); }
 .form-section-title { font-size:.8rem; font-weight:700; color:#2f5496; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; padding-bottom:8px; border-bottom:2px solid #e8f0fe; }
 .form-label { font-size:.8rem; font-weight:600; color:#555; margin-bottom:3px; }
-.form-control, .form-select { font-size:.84rem; border-color:#ddd; }
+.form-control, .form-select { font-size:.84rem; border-color:#ddd; padding-right:2rem; }
 .form-control:focus, .form-select:focus { border-color:#2f5496; box-shadow:0 0 0 .2rem rgba(47,84,150,.15); }
 
 /* ─── Price Table ─── */
