@@ -105,7 +105,7 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
     if billing == "N": q = q.filter(or_(Content.billing == None, Content.billing == ""))
     if search:  q = q.filter(Content.course_name.ilike(f"%{search}%"))
     total = q.count()
-    rows  = q.order_by(Content.id).offset((page-1)*per).limit(per).all()
+    rows  = q.order_by(Content.shooting_date.desc().nullslast(), Content.id.desc()).offset((page-1)*per).limit(per).all()
     total_pages = (total + per - 1) // per
 
     depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
@@ -171,7 +171,7 @@ def schedule(request: Request, year: int = 2026, month: str = "", dept: str = ""
     q = db.query(Content).filter_by(year=year).filter(Content.shooting_date != None)
     if month: q = q.filter_by(shooting_month=month)
     if dept:  q = q.filter_by(department=dept)
-    rows = q.order_by(Content.shooting_date).all()
+    rows = q.order_by(Content.shooting_date.desc()).all()
     grouped = {}
     for r in rows:
         key = r.shooting_date.isoformat()
