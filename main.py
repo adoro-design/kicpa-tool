@@ -152,7 +152,8 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     quiz_count: str=Form(""), materials_supply: str=Form(""), video_marking: str=Form(""),
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
     billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""),
-    travel_expense: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
+    travel_hours: str=Form(""), travel_expense: str=Form(""),
+    notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
     def to_date(s):
@@ -176,6 +177,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         open_date=to_date(open_date), billing=billing or None,
         billing_month=billing_month or None,
         custom_price=to_int(custom_price),
+        travel_hours=to_int(travel_hours),
         travel_expense=to_int(travel_expense), notes=notes or None)
 
     if id:
@@ -387,8 +389,8 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
             if k in fmt: return v or 0
         return 0
 
-    # 출장비 기본값 (단가표 travel 카테고리 "1 ~ 4시간")
-    default_travel = price_tbl.get("1 ~ 4시간", 100000)
+    # 출장비 시간당 단가 (단가표 travel 카테고리 "1 ~ 4시간")
+    travel_rate = price_tbl.get("1 ~ 4시간", 100000)
 
     def get_unit_price(content_row):
         """별도 단가 우선, 없으면 단가표에서 촬영형식으로 조회"""
@@ -397,12 +399,16 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         return match_price(content_row.shooting_format or "")
 
     def get_travel_expense(content_row):
-        """출장 과정의 출장비: 직접 입력값 우선, 없으면 기본 100,000원"""
+        """출장 과정의 출장비 계산
+        우선순위: 직접입력(travel_expense) > 시간계산(travel_hours × 단가) > 기본 1시간(단가)
+        """
         if not content_row.shooting_format or "출장" not in content_row.shooting_format:
             return 0
         if content_row.travel_expense is not None:
             return content_row.travel_expense
-        return default_travel
+        if content_row.travel_hours:
+            return content_row.travel_hours * travel_rate
+        return travel_rate  # 기본 1시간
 
     # billing 템플릿 하위 호환용
     def get_price(fmt):

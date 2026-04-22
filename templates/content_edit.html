@@ -132,12 +132,21 @@
                placeholder="단가표 적용 시 공란"
                value="{{ row.custom_price if row and row.custom_price is not none else '' }}">
       </div>
-      <div class="col-md-3" id="travel_expense_wrap"
-           style="display:{% if row and row.shooting_format and '출장' in row.shooting_format %}block{% else %}none{% endif %}">
-        <label class="form-label">출장비 <small class="text-muted">(기본 100,000원, 4시간 초과 시 직접 입력)</small></label>
-        <input type="number" name="travel_expense" class="form-control" step="10000"
-               placeholder="기본 100,000원"
-               value="{{ row.travel_expense if row and row.travel_expense is not none else '' }}">
+      <div id="travel_wrap" style="display:{% if row and row.shooting_format and '출장' in row.shooting_format %}contents{% else %}none{% endif %}; flex-wrap:wrap; gap:12px;">
+        <div class="col-md-2">
+          <label class="form-label">출장 시간 <small class="text-muted">(시간)</small></label>
+          <input type="number" name="travel_hours" class="form-control" min="1" step="1"
+                 placeholder="예: 8 (이틀×4시간)"
+                 value="{{ row.travel_hours if row and row.travel_hours is not none else '' }}">
+          <div style="font-size:.72rem; color:#888; margin-top:3px;">시간 × 100,000원 자동 계산</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">출장비 직접 입력 <small class="text-muted">(우선 적용)</small></label>
+          <input type="number" name="travel_expense" class="form-control" step="10000"
+                 placeholder="시간 계산 무시하고 직접 입력"
+                 value="{{ row.travel_expense if row and row.travel_expense is not none else '' }}">
+          <div style="font-size:.72rem; color:#888; margin-top:3px;">4시간 초과 협의금액 등</div>
+        </div>
       </div>
     </div>
   </div>
@@ -157,9 +166,9 @@
 {% block scripts %}
 <script>
   const fmtSelect = document.querySelector('select[name="shooting_format"]');
-  const travelWrap = document.getElementById('travel_expense_wrap');
+  const travelWrap = document.getElementById('travel_wrap');
   function toggleTravel() {
-    travelWrap.style.display = fmtSelect.value.includes('출장') ? 'block' : 'none';
+    travelWrap.style.display = fmtSelect.value.includes('출장') ? 'contents' : 'none';
   }
   fmtSelect.addEventListener('change', toggleTravel);
 </script>
