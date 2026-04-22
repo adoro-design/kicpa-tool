@@ -94,16 +94,17 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     # 신규 컬럼 자동 추가 마이그레이션 (이미 있으면 무시)
-    with engine.connect() as conn:
-        for col_def in [
-            "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
-            "ALTER TABLE kicpa_contents ADD COLUMN billing_month VARCHAR(20)",
-        ]:
-            try:
+    # 각 ALTER TABLE을 별도 커넥션으로 실행해야 PostgreSQL 트랜잭션 오염 방지
+    for col_def in [
+        "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
+        "ALTER TABLE kicpa_contents ADD COLUMN billing_month VARCHAR(20)",
+    ]:
+        try:
+            with engine.connect() as conn:
                 conn.execute(text(col_def))
                 conn.commit()
-            except Exception:
-                pass  # 이미 컬럼 존재
+        except Exception:
+            pass  # 이미 컬럼 존재
 
     db = SessionLocal()
     try:
