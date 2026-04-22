@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from starlette.middleware.sessions import SessionMiddleware
 from passlib.context import CryptContext
 from datetime import date
@@ -110,7 +110,16 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
     if billing == "N": q = q.filter(or_(Content.billing == None, Content.billing == ""))
     if search:  q = q.filter(Content.course_name.ilike(f"%{search}%"))
     total = q.count()
-    rows  = q.order_by(Content.shooting_date.desc().nullslast(), Content.id.desc()).offset((page-1)*per).limit(per).all()
+    # 촬영날짜 우선, 없으면 동영상 마킹 날짜 문자열을 DATE로 변환해 사용
+    from sqlalchemy import text as sa_text
+    date_sort = sa_text(
+        "COALESCE(shooting_date, "
+        "  CASE WHEN video_marking ~ '^[0-9]{4}[./-][0-9]' "
+        "  THEN TO_DATE(SUBSTRING(REPLACE(REPLACE(video_marking,'.', '-'),'/','-'),1,10),'YYYY-MM-DD') "
+        "  ELSE NULL END"
+        ") DESC NULLS LAST"
+    )
+    rows  = q.order_by(date_sort, Content.id.desc()).offset((page-1)*per).limit(per).all()
     total_pages = (total + per - 1) // per
 
     depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]

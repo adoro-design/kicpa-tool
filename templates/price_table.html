@@ -12,6 +12,12 @@
 <div class="alert alert-success alert-dismissible fade show py-2">항목이 삭제되었습니다.<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
 {% endif %}
 
+<!-- VAT 안내 -->
+<div class="alert alert-info py-2 mb-3" style="font-size:.85rem;">
+  <i class="bi-info-circle me-1"></i>
+  아래 모든 단가는 <strong>VAT 별도</strong> 금액입니다. 정산 시 VAT(10%)가 추가됩니다.
+</div>
+
 <!-- 단가 수정 폼 -->
 <form method="post" action="/price_table/update" id="priceForm">
 <div class="row g-4">
@@ -124,11 +130,16 @@
 
 <!-- 단가표 요약 -->
 <div class="form-section mt-4">
-  <div class="form-section-title">단가표 요약</div>
+  <div class="form-section-title d-flex justify-content-between align-items-center">
+    단가표 요약
+    <span style="font-size:.75rem; font-weight:400; color:#e67700; letter-spacing:0;">
+      <i class="bi-exclamation-circle me-1"></i>모든 단가 VAT 별도
+    </span>
+  </div>
   <table class="table table-sm" style="font-size:.84rem;">
     <thead>
       <tr style="background:#f8f9fc;">
-        <th>구분</th><th>항목</th><th class="text-end">단가</th><th>단위</th><th>비고</th><th>상태</th>
+        <th>구분</th><th>항목</th><th class="text-end">단가 (VAT별도)</th><th>단위</th><th>비고</th><th>상태</th>
       </tr>
     </thead>
     <tbody>

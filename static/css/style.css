@@ -156,7 +156,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f2f5; color: #333
 
 /* ─── Pagination ─── */
 .pagination .page-link { font-size:.82rem; padding:5px 11px; color:#2f5496; border-color:#e0e0e0; }
-.pagination .page-item.active .page-link { background:#2f5496; border-color:#2f5496; }
+.pagination .page-item.active .page-link { background:#2f5496; border-color:#2f5496; color:#fff; }
 
 /* ─── Responsive ─── */
 @media (max-width:768px) {
