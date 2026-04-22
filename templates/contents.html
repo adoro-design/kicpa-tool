@@ -46,7 +46,7 @@
       <thead>
         <tr>
           <th style="width:40px;">#</th>
-          <th>촬영월</th>
+          <th>청구월</th>
           <th>과정명</th>
           <th>담당부서</th>
           <th>차시</th>
@@ -66,7 +66,12 @@
           {% for r in rows %}
           <tr>
             <td class="text-muted" style="font-size:.75rem;">{{ loop.index + (page-1)*20 }}</td>
-            <td><span class="badge-month">{{ r.shooting_month or '-' }}</span></td>
+            <td>
+              <span class="badge-month">{{ r.billing_month or r.shooting_month or '-' }}</span>
+              {% if r.billing_month and r.shooting_month and r.billing_month != r.shooting_month %}
+              <br><small class="text-muted" style="font-size:.68rem;">촬영 {{ r.shooting_month }}</small>
+              {% endif %}
+            </td>
             <td>
               <div style="max-width:260px; font-weight:500; font-size:.84rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
                    title="{{ r.course_name }}">{{ r.course_name | clean_name }}</div>

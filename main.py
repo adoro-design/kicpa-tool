@@ -110,8 +110,11 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
     if billing == "N": q = q.filter(or_(Content.billing == None, Content.billing == ""))
     if search:  q = q.filter(Content.course_name.ilike(f"%{search}%"))
     total = q.count()
-    # 촬영날짜 우선, 없으면 동영상 마킹 날짜 문자열을 DATE로 변환해 사용
+    # 청구월 우선 정렬 → 촬영날짜(없으면 동영상 마킹) 순
     from sqlalchemy import text as sa_text
+    billing_month_sort = case(
+        {m: i for i, m in enumerate(MONTHS)},
+        value=Content.billing_month, else_=99)
     date_sort = sa_text(
         "COALESCE(shooting_date, "
         "  CASE WHEN video_marking ~ '^[0-9]{4}[./-][0-9]' "
@@ -119,7 +122,7 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
         "  ELSE NULL END"
         ") DESC NULLS LAST"
     )
-    rows  = q.order_by(date_sort, Content.id.desc()).offset((page-1)*per).limit(per).all()
+    rows  = q.order_by(billing_month_sort.desc(), date_sort, Content.id.desc()).offset((page-1)*per).limit(per).all()
     total_pages = (total + per - 1) // per
 
     depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
