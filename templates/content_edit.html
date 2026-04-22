@@ -26,7 +26,7 @@
           {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.shooting_month==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
-      <div class="col-md-6">
+      <div class="col-md-10">
         <label class="form-label">과정명 <span class="text-danger">*</span></label>
         <input type="text" name="course_name" class="form-control" value="{{ row.course_name or '' }}" required>
       </div>
@@ -91,7 +91,7 @@
 
   <!-- 일정 -->
   <div class="form-section">
-    <div class="form-section-title">일정</div>
+    <div class="form-section-title">개발 및 오픈 일정</div>
     <div class="row g-3">
       <div class="col-md-4">
         <label class="form-label">개발(외주) 완료일</label>
@@ -116,7 +116,7 @@
         <label class="form-label">비용 청구</label>
         <select name="billing" class="form-select">
           <option value="">미청구</option>
-          <option value="Y" {% if row and row.billing=='Y' %}selected{% endif %}>청구완료</option>
+          <option value="Y" {% if row and row.billing %}selected{% endif %}>청구완료</option>
         </select>
       </div>
       <div class="col-md-4">
