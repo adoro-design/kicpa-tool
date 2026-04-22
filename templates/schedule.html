@@ -45,11 +45,6 @@
     </div>
     <div style="text-align:right; min-width:80px;">
       {% if r.session_count %}<div style="font-size:.8rem; color:#555;">{{ r.session_count }}차시</div>{% endif %}
-      {% if r.filming_consent == '완료' %}
-        <span style="font-size:.72rem; color:#1e8e3e;"><i class="bi-check-circle me-1"></i>동의서</span>
-      {% else %}
-        <span style="font-size:.72rem; color:#f57c00;"><i class="bi-exclamation-circle me-1"></i>동의서 미수령</span>
-      {% endif %}
     </div>
   </div>
   {% endfor %}

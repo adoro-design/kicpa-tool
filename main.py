@@ -298,6 +298,8 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
 
             course_name = name_cleaned
             if not course_name: continue
+            # 과정명이 순수 숫자이거나 너무 짧으면 불필요한 행으로 간주 → 건너뜀
+            if course_name.isdigit() or len(course_name) < 2: continue
 
             # 촬영날짜에서 월 자동 추출
             shoot_date = to_date(row[13])
