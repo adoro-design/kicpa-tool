@@ -197,10 +197,16 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
     mn = get_month_number(month_str)
     wb = openpyxl.load_workbook(os.path.join(TEMPLATE_DIR, 'tpl_devreq.xlsx'))
     ws = wb['콘텐츠개발내역']
+
+    # 제목·작성일
     ws['A1'] = f"{mn}월 콘텐츠 개발 내역"
-    ws['N1'] = f"작성일 : {get_last_business_day(year, mn).strftime('%Y-%m-%d')}"
+    ws.cell(1, 14).value = f"작성일 : {get_last_business_day(year, mn).strftime('%Y-%m-%d')}"
+
+    # 부서행 삽입 (row2 앞에 삽입 → 기존 헤더/데이터/합계 모두 아래로)
+    ws.insert_rows(2, 1)
     ws['A2'] = f"* {dept}"
 
+    # 새 구조: 헤더=row3, 데이터=row4~, 합계=rowN
     tds = 4
     ttr = tds
     while ttr <= ws.max_row:
@@ -240,19 +246,18 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
     ws.cell(tr, 13, f"=SUM(M{tds}:M{er})").number_format = '#,##0'
     ws.cell(tr, 14, f"=SUM(N{tds}:N{er})").number_format = '#,##0'
 
-    # Sheet3: 구분·강좌명·분량·유형·단가·금액·총액 열 공란
-    CLEAR = {3,4,5,6,7,8,9}
-    ws3 = wb['Sheet3'] if 'Sheet3' in wb.sheetnames else None
-    if ws3:
-        for row in ws3.iter_rows():
-            bv = row[1].value if len(row) > 1 else None
-            if bv is not None and (isinstance(bv, (int,float)) or str(bv)=='합계'):
+    # 품의 시트(구 Sheet3): col A=번호, col B-H = 구분~총액 공란
+    CLEAR = {2,3,4,5,6,7,8}  # B~H
+    ws_pm = (wb['품의'] if '품의' in wb.sheetnames
+             else wb['Sheet3'] if 'Sheet3' in wb.sheetnames else None)
+    if ws_pm:
+        for row in ws_pm.iter_rows():
+            av = row[0].value if len(row) > 0 else None
+            if av is not None and isinstance(av, (int, float)):
                 for cell in row:
                     if cell.column in CLEAR:
-                        try:
-                            cell.value = None
-                        except (AttributeError, TypeError):
-                            pass  # MergedCell 무시
+                        try: cell.value = None
+                        except: pass
 
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
 
@@ -260,26 +265,14 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
 # 3. 개발요청서 Word
 def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
     doc   = DocxDocument(os.path.join(TEMPLATE_DIR, 'tpl_devreq.docx'))
-    table = doc.tables[0]
     sj    = get_sijengil(ps)
 
-    for cell in table.rows[5].cells[1:]:
-        for p in cell.paragraphs:
-            _replace_para(p, "2026년 03월 03일", fmt_kr2(sj))
-
-    replacements = [
-        ("조세지원본부", dept),
-        ("2026년 03월 04일", fmt_kr2(ps)),
-        ("2026년 03월 27일", fmt_kr2(pe)),
-        ("2026년 03월 16일", fmt_kr2(write_dt)),
-    ]
-    seen = set()
-    for cell in table.rows[7].cells:
-        cid = id(cell._tc)
-        if cid in seen: continue
-        seen.add(cid)
-        for old, new in replacements:
-            for p in cell.paragraphs: _replace_para(p, old, new)
+    # 시행일, 본문 직접 치환 (각 텍스트가 별도 단락에 위치)
+    _replace_doc(doc, "2026년 03월 03일", fmt_kr2(sj))   # 시행일
+    _replace_doc(doc, "부서명",            dept)           # 부서명
+    _replace_doc(doc, "2026년 03월 04일", fmt_kr2(ps))    # 개발기간 시작
+    _replace_doc(doc, "2026년 03월 27일", fmt_kr2(pe))    # 개발기간 종료
+    _replace_doc(doc, "2026년 03월 16일", fmt_kr2(write_dt))  # 서명일
 
     buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
@@ -355,8 +348,8 @@ def generate_all(courses, dept, month_str, year, price_tbl,
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
     pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe)
 
-    m2  = f"{mn:02d}"
-    ds  = dept.replace(" ", "").replace("•", "")
+    mm_str = f"{mn:02d}월"
+    mmdd   = write_dt.strftime('%m%d')   # 작성일 MMDD (예: 0430)
 
     pnl      = gen_pnl_excel(courses, dept, month_str, year, price_tbl,
                               studio_hours, include_studio, pm_rate, prod_rate)
@@ -368,8 +361,8 @@ def generate_all(courses, dept, month_str, year, price_tbl,
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"손익분석서_{ds}_{year}{m2}.xlsx",     pnl)
-        zf.writestr(f"프로젝트프로파일_{ds}_{year}{m2}.docx", prof)
-        zf.writestr(f"개발요청서_{ds}_{year}{m2}.docx",      rd)
-        zf.writestr(f"개발요청서첨부_{ds}_{year}{m2}.xlsx",   rx)
+        zf.writestr(f"손익분석서_한국공인회계사회_{mm_str}_V1.0_{mmdd}_{dept}.xlsx",                  pnl)
+        zf.writestr(f"프로젝트프로파일_한국공인회계사회_{mm_str}_V0.1_{mmdd}_{dept}.docx",             prof)
+        zf.writestr(f"한공회_{year}년{mn:02d}월분_컨텐츠개발요청서_{dept}.docx",                       rd)
+        zf.writestr(f"한공회_{year}년{mn:02d}월분_컨텐츠개발요청서_제출시첨부사항_{dept}.xlsx",         rx)
     return buf.getvalue()
