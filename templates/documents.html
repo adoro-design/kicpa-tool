@@ -3,158 +3,125 @@
 {% block page_title %}문서 자동 생성{% endblock %}
 
 {% block content %}
-<div class="row g-4">
-  <!-- 부서 선택 및 생성 -->
-  <div class="col-lg-5">
-    <div class="form-section">
-      <div class="form-section-title">문서 생성</div>
-      <form method="post" action="/documents/generate" id="docForm">
-        <input type="hidden" name="year" value="{{ year }}">
-        <div class="mb-3">
-          <label class="form-label">담당부서 선택 <span class="text-danger">*</span></label>
-          <select name="dept" class="form-select" required>
-            <option value="">부서를 선택하세요</option>
-            {% for d in depts %}
-            <option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">정산 월 (선택)</label>
-          <select name="billing_month" class="form-select">
-            <option value="">전체</option>
-            {% for m in MONTHS %}
-            <option value="{{ m }}">{{ m }}</option>
-            {% endfor %}
-          </select>
-        </div>
 
-        <!-- 생성할 문서 선택 -->
-        <div class="mb-4">
-          <label class="form-label">생성할 문서</label>
-          <div class="d-flex flex-column gap-2">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="doc_request" id="d1" checked>
-              <label class="form-check-label" for="d1">
-                <i class="bi-file-earmark-word text-primary me-1"></i>개발요청서
-                <small class="text-muted">(Word)</small>
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="doc_attachment" id="d2" checked>
-              <label class="form-check-label" for="d2">
-                <i class="bi-file-earmark-excel text-success me-1"></i>개발요청서 첨부자료
-                <small class="text-muted">(Excel)</small>
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="doc_pl" id="d3" checked>
-              <label class="form-check-label" for="d3">
-                <i class="bi-file-earmark-excel text-success me-1"></i>손익분석서
-                <small class="text-muted">(Excel)</small>
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="doc_profile" id="d4" checked>
-              <label class="form-check-label" for="d4">
-                <i class="bi-file-earmark-excel text-success me-1"></i>프로젝트 프로파일
-                <small class="text-muted">(Excel)</small>
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="doc_studio" id="d5">
-              <label class="form-check-label" for="d5">
-                <i class="bi-file-earmark-word text-primary me-1"></i>스튜디오 대관료 정산
-                <small class="text-muted">(Word)</small>
-              </label>
-            </div>
-          </div>
-        </div>
+{% if request.query_params.get('err') %}
+<div class="alert alert-danger"><i class="bi-exclamation-triangle me-1"></i>오류: {{ request.query_params.get('err') }}</div>
+{% endif %}
+{% if request.query_params.get('msg') == 'no_data' %}
+<div class="alert alert-warning">선택한 부서·월의 과정 데이터가 없습니다.</div>
+{% endif %}
 
-        <button type="submit" class="btn btn-primary w-100">
-          <i class="bi-file-earmark-arrow-down me-1"></i>문서 생성 (준비 중)
-        </button>
-        <div class="form-text text-center mt-2">
-          <i class="bi-info-circle me-1"></i>문서 생성 기능은 다음 업데이트에서 제공됩니다.
-        </div>
-      </form>
+<!-- 조건 선택 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">생성 조건 선택</div>
+  <form method="get" action="/documents" class="row g-3 align-items-end">
+    <input type="hidden" name="year" value="{{ year }}">
+    <div class="col-md-4">
+      <label class="form-label">담당부서 <span class="text-danger">*</span></label>
+      <select name="dept" class="form-select" onchange="this.form.submit()">
+        <option value="">부서 선택</option>
+        {% for d in depts %}
+        <option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
     </div>
+    <div class="col-md-3">
+      <label class="form-label">청구월 <span class="text-danger">*</span></label>
+      <select name="month" class="form-select" onchange="this.form.submit()">
+        <option value="">월 선택</option>
+        {% for m in billing_months %}
+        <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-outline-secondary w-100">
+        <i class="bi-search me-1"></i>미리보기
+      </button>
+    </div>
+  </form>
+</div>
 
-    <!-- 생성된 문서 다운로드 안내 -->
-    <div class="card mt-3">
-      <div class="card-body" style="font-size:.83rem;">
-        <h6 style="font-size:.85rem;"><i class="bi-folder2-open me-1 text-warning"></i>생성된 문서 위치</h6>
-        <p class="text-muted mb-0">생성된 문서는 <code>generated/[부서명]/</code> 폴더에 저장됩니다.</p>
+{% if dept and month %}
+<!-- 과정 미리보기 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">{{ dept }} · {{ month }} — 과정 목록 ({{ preview|length }}건)</div>
+
+  {% if preview %}
+  <div style="overflow-x:auto; margin-bottom:16px;">
+    <table class="table table-sm table-hover" style="font-size:.83rem;">
+      <thead>
+        <tr>
+          <th>#</th><th>과정명</th><th>형식</th>
+          <th class="text-center">차시</th><th class="text-center">챕터</th>
+          <th>촬영일</th><th>오픈일</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in preview %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td style="max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+              title="{{ c.course_name }}">{{ c.course_name | clean_name }}</td>
+          <td>
+            {% if c.shooting_format %}<span class="badge-format">{{ c.shooting_format }}</span>
+            {% else %}-{% endif %}
+          </td>
+          <td class="text-center">{{ c.session_count or '-' }}</td>
+          <td class="text-center">{{ c.chapter_count or '-' }}</td>
+          <td style="font-size:.8rem;">{{ c.shooting_date | fmt_date if c.shooting_date else '-' }}</td>
+          <td style="font-size:.8rem;">
+            {% if c.open_date %}{{ c.open_date | fmt_date }}
+            {% else %}<span class="badge-notyet">미오픈</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 스튜디오 안내 -->
+  <div class="alert alert-info py-2 mb-4" style="font-size:.84rem;">
+    <i class="bi-camera-video me-1"></i>
+    <strong>{{ month }} 스튜디오 대관료</strong>는
+    <a href="/studio?year={{ year }}&month={{ month }}">스튜디오 관리</a>에서
+    입력 후 생성하세요. (가장 큰 부서에 자동 배분)
+  </div>
+
+  <!-- 생성 버튼 -->
+  <form method="post" action="/documents/generate">
+    <input type="hidden" name="year"  value="{{ year }}">
+    <input type="hidden" name="dept"  value="{{ dept }}">
+    <input type="hidden" name="month" value="{{ month }}">
+    <div class="d-flex align-items-center gap-3">
+      <button type="submit" class="btn btn-primary" style="font-size:.95rem; padding:10px 28px;">
+        <i class="bi-file-earmark-zip me-2"></i>문서 생성 (ZIP 다운로드)
+      </button>
+      <div class="text-muted" style="font-size:.82rem; line-height:1.5;">
+        <i class="bi-info-circle me-1"></i>
+        손익분석서(xlsx) · 프로젝트 프로파일(docx)<br>
+        개발요청서(docx) · 개발요청서 첨부(xlsx) — 총 4개 파일
       </div>
     </div>
-  </div>
+  </form>
 
-  <!-- 부서별 현황 + 생성 이력 -->
-  <div class="col-lg-7">
-    <!-- 부서별 콘텐츠 현황 -->
-    <div class="table-card mb-4">
-      <div class="card-header">부서별 콘텐츠 현황 ({{ year }}년)</div>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>담당부서</th>
-            <th class="text-center">콘텐츠</th>
-            <th class="text-center">차시수</th>
-            <th class="text-center">챕터수</th>
-            <th>문서생성</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in dept_summary %}
-          <tr>
-            <td style="font-weight:500;">{{ d.department }}</td>
-            <td class="text-center">{{ d.total }}</td>
-            <td class="text-center">{{ d.sessions or 0 }}</td>
-            <td class="text-center">{{ d.chapters or 0 }}</td>
-            <td>
-              <button class="btn btn-xs btn-outline-primary" style="font-size:.74rem; padding:2px 8px;"
-                      onclick="document.querySelector('select[name=dept]').value='{{ d.department }}'; document.getElementById('d1').checked=true; document.getElementById('d2').checked=true;">
-                선택
-              </button>
-            </td>
-          </tr>
-          {% endfor %}
-          {% if not dept_summary %}
-          <tr><td colspan="5" class="text-center text-muted py-3">데이터가 없습니다.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+  {% else %}
+  <div class="text-center py-4 text-muted">선택한 조건의 과정 데이터가 없습니다.</div>
+  {% endif %}
+</div>
 
-    <!-- 생성 이력 -->
-    <div class="table-card">
-      <div class="card-header">최근 문서 생성 이력</div>
-      <table class="table">
-        <thead>
-          <tr><th>생성일시</th><th>문서유형</th><th>담당부서</th><th>파일</th></tr>
-        </thead>
-        <tbody>
-          {% if history %}
-            {% for h in history %}
-            <tr>
-              <td style="font-size:.8rem;">{{ h.created_at.strftime('%m.%d %H:%M') if h.created_at else '-' }}</td>
-              <td style="font-size:.82rem;">{{ h.doc_type or '-' }}</td>
-              <td style="font-size:.82rem;">{{ h.department or '-' }}</td>
-              <td>
-                {% if h.file_path %}
-                <a href="/download/{{ h.id }}" class="btn btn-xs btn-outline-secondary" style="font-size:.74rem; padding:2px 8px;">
-                  <i class="bi-download me-1"></i>다운로드
-                </a>
-                {% else %}-{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr><td colspan="4" class="text-center text-muted py-3">생성 이력이 없습니다.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+{% else %}
+<!-- 초기 안내 -->
+<div class="text-center py-5">
+  <i class="bi-file-earmark-zip" style="font-size:3.5rem; color:#ccc; display:block; margin-bottom:16px;"></i>
+  <div class="text-muted" style="font-size:.95rem;">부서와 청구월을 선택하면 과정 목록을 확인하고 문서를 생성할 수 있습니다.</div>
+  <div class="mt-3 d-flex justify-content-center gap-3" style="font-size:.83rem; color:#888;">
+    <span><i class="bi-file-earmark-excel text-success me-1"></i>손익분석서</span>
+    <span><i class="bi-file-earmark-word text-primary me-1"></i>프로젝트 프로파일</span>
+    <span><i class="bi-file-earmark-word text-primary me-1"></i>개발요청서</span>
+    <span><i class="bi-file-earmark-excel text-success me-1"></i>개발요청서 첨부</span>
   </div>
 </div>
+{% endif %}
+
 {% endblock %}

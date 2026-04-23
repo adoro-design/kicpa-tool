@@ -11,6 +11,7 @@ import os, io, re
 from dotenv import load_dotenv
 
 from database import get_db, init_db, User, Content, PriceTable, Document, StudioRental, CustomerContact
+import docgen
 
 load_dotenv()
 
@@ -690,3 +691,67 @@ def documents_page(request: Request, year: int = 2026, dept: str = "", month: st
         "billing_months": billing_months, "month": month,
         "preview": preview, "MONTHS": MONTHS,
     })
+
+@app.post("/documents/generate")
+def documents_generate(request: Request, year: int = Form(2026),
+                       dept: str = Form(""), month: str = Form(""),
+                       db: Session = Depends(get_db)):
+    require_admin(request)
+    if not dept or not month:
+        return RedirectResponse(f"/documents?year={year}", 302)
+
+    # 과정 목록
+    courses = db.query(Content).filter_by(year=year, department=dept,
+                                          billing_month=month).all()
+    if not courses:
+        return RedirectResponse(
+            f"/documents?year={year}&dept={dept}&month={month}&msg=no_data", 302)
+
+    # 단가표
+    price_tbl = {p.type_name: p.unit_price
+                 for p in db.query(PriceTable).filter_by(is_active=True).all()}
+
+    # 스튜디오 대관료 (해당 월)
+    studio_rentals = db.query(StudioRental).filter_by(year=year, month=month).all()
+    studio_hours   = sum(r.hours or 0 for r in studio_rentals)
+
+    # 이 부서가 해당 월 최대 개발비 부서인지 판별
+    tr = price_tbl.get("1 ~ 4시간", 100000)
+    def dept_revenue(d):
+        rows = db.query(Content).filter_by(year=year, billing_month=month, department=d).all()
+        return sum(
+            docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
+            + docgen.get_travel_for(c, tr)
+            for c in rows
+        )
+    all_depts   = [d[0] for d in db.query(Content.department)
+                   .filter_by(year=year, billing_month=month)
+                   .filter(Content.department != None).distinct().all()]
+    if all_depts:
+        max_dept = max(all_depts, key=dept_revenue)
+        include_studio = (dept == max_dept)
+    else:
+        include_studio = True
+
+    # 고객담당자
+    customer = db.query(CustomerContact).filter_by(
+        department=dept, is_active=True).first()
+
+    # ZIP 생성
+    try:
+        zip_bytes = docgen.generate_all(
+            courses=courses, dept=dept, month_str=month, year=year,
+            price_tbl=price_tbl, studio_hours=studio_hours,
+            include_studio=include_studio, customer_contact=customer)
+    except Exception as e:
+        return RedirectResponse(
+            f"/documents?year={year}&dept={dept}&month={month}&err={str(e)[:80]}", 302)
+
+    month_num  = docgen.get_month_number(month)
+    dept_short = dept.replace(" ", "")
+    filename   = f"{year}{month_num:02d}_한공회_{dept_short}_정산문서.zip"
+    return StreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
