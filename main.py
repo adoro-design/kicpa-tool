@@ -762,11 +762,13 @@ def documents_generate(request: Request, year: int = Form(2026),
             "detail": err_detail,
         }, status_code=500)
 
+    from urllib.parse import quote
     month_num  = docgen.get_month_number(month)
     dept_short = dept.replace(" ", "")
     filename   = f"{year}{month_num:02d}_한공회_{dept_short}_정산문서.zip"
+    encoded    = quote(filename, safe="")
     return StreamingResponse(
         io.BytesIO(zip_bytes),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
     )
