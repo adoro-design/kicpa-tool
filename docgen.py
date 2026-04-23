@@ -248,8 +248,11 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
             bv = row[1].value if len(row) > 1 else None
             if bv is not None and (isinstance(bv, (int,float)) or str(bv)=='합계'):
                 for cell in row:
-                    if cell.column in CLEAR and not isinstance(cell, openpyxl.cell.cell.MergedCell):
-                        cell.value = None
+                    if cell.column in CLEAR:
+                        try:
+                            cell.value = None
+                        except (AttributeError, TypeError):
+                            pass  # MergedCell 무시
 
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
 
@@ -291,8 +294,8 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     revenue  = calc_revenue(courses, price_tbl)
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
     pname    = build_project_name(courses)
-    pm_pct   = round(pm_rate   * 100, 1)
-    prod_pct = round(prod_rate * 100, 1)
+    pm_pct   = round(pm_rate   * 100)
+    prod_pct = round(prod_rate * 100)
     period_str = f"{fmt_short(ps)} ~ {fmt_short(pe)}"
 
     ns  = sum(c.session_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[0])
@@ -327,8 +330,8 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     _set_cell_text(t1.rows[12].cells[2], cp)
     _set_cell_text(t1.rows[12].cells[5], ce)
     # 참여인력 표 - 직접 셀 설정 (전체치환 오염 방지)
-    _set_cell_text(t2.rows[2].cells[4], f"{pm_pct:.4g}%")    # PM 참여율
-    _set_cell_text(t2.rows[3].cells[4], f"{prod_pct:.4g}%")  # PROD 참여율
+    _set_cell_text(t2.rows[2].cells[4], f"{pm_pct}%")   # PM 참여율
+    _set_cell_text(t2.rows[3].cells[4], f"{prod_pct}%") # PROD 참여율
     _set_cell_text(t2.rows[2].cells[3], period_str)            # PM 참여기간
     _set_cell_text(t2.rows[3].cells[3], period_str)            # PROD 참여기간
 
