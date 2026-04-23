@@ -273,7 +273,18 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
         wb = openpyxl.load_workbook(buf, data_only=True)
         ws = wb["개발관리"] if "개발관리" in wb.sheetnames else wb.active
 
+        # replace 모드: 삭제 전 수동 입력 데이터 저장 (과정명 기준 복원용)
+        manual_data = {}
         if import_mode == "replace":
+            for r in db.query(Content).filter_by(year=year).all():
+                key = clean_name(r.course_name or "").strip()
+                if key:
+                    manual_data[key] = {
+                        "custom_price":   r.custom_price,
+                        "travel_hours":   r.travel_hours,
+                        "travel_expense": r.travel_expense,
+                        "notes":          r.notes,
+                    }
             db.query(Content).filter_by(year=year).delete()
             db.commit()
 
@@ -322,6 +333,9 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
             shoot_date = to_date(row[13])
             auto_month = f"{shoot_date.month}월" if shoot_date else prev_month
 
+            # 수동 입력 데이터 복원 (replace 모드에서 기존 데이터 유지)
+            manual = manual_data.get(course_name.strip(), {})
+
             db.add(Content(year=year, shooting_month=auto_month or None,
                 course_name=course_name, required_optional=str(row[3] or "") or None,
                 original_code=str(row[4] or "") or None, category=str(row[5] or "") or None,
@@ -337,8 +351,13 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
                 dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
                 open_date=to_date(row[23]), billing=str(row[24] or "") or None,
-                billing_month=str(row[25] or "") or None,
-                notes=combined_notes))
+                billing_month=str(row[25] or "").strip() or None,
+                # 수동 입력값: Excel에 없는 항목이므로 기존 값 우선 복원
+                custom_price=manual.get("custom_price"),
+                travel_hours=manual.get("travel_hours"),
+                travel_expense=manual.get("travel_expense"),
+                # 비고: Excel 값 우선, 없으면 기존 수동 입력 비고 유지
+                notes=combined_notes or manual.get("notes")))
             imported += 1
 
         db.commit()

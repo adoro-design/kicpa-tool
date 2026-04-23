@@ -123,7 +123,7 @@
         <label class="form-label">청구월</label>
         <select name="billing_month" class="form-select">
           <option value="">선택</option>
-          {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.billing_month==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.billing_month and row.billing_month.strip()==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-3">
