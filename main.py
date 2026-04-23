@@ -17,6 +17,16 @@ load_dotenv()
 
 app = FastAPI(title="KICPA 콘텐츠 관리")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "kicpa-dev-secret"))
+
+@app.exception_handler(Exception)
+async def all_exception_handler(request: Request, exc: Exception):
+    import traceback
+    from fastapi.responses import HTMLResponse
+    detail = traceback.format_exc()
+    return HTMLResponse(
+        content=f"<h2 style='color:red'>오류 발생</h2><pre style='background:#f8f8f8;padding:20px'>{detail}</pre>",
+        status_code=500
+    )
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 pwd_ctx = CryptContext(schemes=["bcrypt"])
