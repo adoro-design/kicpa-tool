@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}고객담당자 관리{% endblock %}
+{% block page_title %}고객담당자 관리{% endblock %}
+
+{% block content %}
+<!-- 담당자 추가 폼 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">담당자 추가</div>
+  <form method="post" action="/customers/add">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label">부서명 <span class="text-danger">*</span></label>
+        <select name="department" class="form-select" required>
+          <option value="">선택</option>
+          {% for d in depts %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">담당자명</label>
+        <input type="text" name="contact_name" class="form-control" placeholder="홍길동">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">전화번호</label>
+        <input type="text" name="phone" class="form-control" placeholder="02-0000-0000">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">이메일</label>
+        <input type="email" name="email" class="form-control" placeholder="name@kicpa.or.kr">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">비고</label>
+        <input type="text" name="note" class="form-control">
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi-plus-lg"></i></button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- 담당자 목록 -->
+<div class="table-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>부서별 고객담당자 목록</span>
+    <span class="text-muted" style="font-size:.8rem;">총 {{ contacts|length }}건</span>
+  </div>
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>부서명</th>
+        <th>담당자명</th>
+        <th>전화번호</th>
+        <th>이메일</th>
+        <th>비고</th>
+        <th style="width:100px;">관리</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contacts %}
+      <tr id="row-{{ c.id }}">
+        <td style="font-size:.84rem;">{{ c.department }}</td>
+        <td style="font-size:.84rem;">{{ c.contact_name or '-' }}</td>
+        <td style="font-size:.84rem;">{{ c.phone or '-' }}</td>
+        <td style="font-size:.84rem;">{{ c.email or '-' }}</td>
+        <td style="font-size:.84rem;">{{ c.note or '-' }}</td>
+        <td>
+          <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;"
+            onclick="openEdit({{ c.id }}, '{{ c.department }}', '{{ c.contact_name or '' }}', '{{ c.phone or '' }}', '{{ c.email or '' }}', '{{ c.note or '' }}')">수정</button>
+          <form method="post" action="/customers/delete/{{ c.id }}" style="display:inline;"
+            onsubmit="return confirm('삭제하시겠습니까?')">
+            <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.75rem; padding:2px 8px;">삭제</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center py-4 text-muted">등록된 담당자가 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 수정 모달 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" style="font-size:.95rem;">담당자 수정</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="editForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">부서명</label>
+            <select name="department" id="edit_dept" class="form-select">
+              {% for d in depts %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">담당자명</label>
+            <input type="text" name="contact_name" id="edit_name" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">전화번호</label>
+            <input type="text" name="phone" id="edit_phone" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">이메일</label>
+            <input type="email" name="email" id="edit_email" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">비고</label>
+            <input type="text" name="note" id="edit_note" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi-save me-1"></i>저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function openEdit(id, dept, name, phone, email, note) {
+  document.getElementById('editForm').action = '/customers/edit/' + id;
+  document.getElementById('edit_dept').value  = dept;
+  document.getElementById('edit_name').value  = name;
+  document.getElementById('edit_phone').value = phone;
+  document.getElementById('edit_email').value = email;
+  document.getElementById('edit_note').value  = note;
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+</script>
+{% endblock %}
+{% endblock %}

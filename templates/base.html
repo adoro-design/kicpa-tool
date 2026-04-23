@@ -26,6 +26,8 @@
       <li class="nav-section">관리</li>
       <li class="nav-item"><a class="nav-link {% if '/documents' in request.url.path %}active{% endif %}" href="/documents"><i class="bi-file-earmark-word"></i> 문서 생성</a></li>
       <li class="nav-item"><a class="nav-link {% if '/billing' in request.url.path %}active{% endif %}" href="/billing"><i class="bi-cash-stack"></i> 정산 관리</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/studio' in request.url.path %}active{% endif %}" href="/studio"><i class="bi-camera-video"></i> 스튜디오 대관</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/customers' in request.url.path %}active{% endif %}" href="/customers"><i class="bi-person-lines-fill"></i> 고객담당자</a></li>
       <li class="nav-item"><a class="nav-link {% if '/price_table' in request.url.path %}active{% endif %}" href="/price_table"><i class="bi-tag"></i> 단가표 관리</a></li>
       <li class="nav-item"><a class="nav-link {% if '/users' in request.url.path %}active{% endif %}" href="/users"><i class="bi-people"></i> 사용자 관리</a></li>
       {% endif %}

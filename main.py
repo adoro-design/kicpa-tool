@@ -10,7 +10,7 @@ from datetime import date
 import os, io, re
 from dotenv import load_dotenv
 
-from database import get_db, init_db, User, Content, PriceTable, Document
+from database import get_db, init_db, User, Content, PriceTable, Document, StudioRental, CustomerContact
 
 load_dotenv()
 
@@ -574,21 +574,119 @@ def users_change_pw(request: Request, user_id: int=Form(...), new_password: str=
         db.commit()
     return RedirectResponse("/users", 302)
 
+# ── 고객담당자 관리 ───────────────────────────────
+@app.get("/customers", response_class=HTMLResponse)
+def customers_page(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
+    contacts = db.query(CustomerContact).order_by(CustomerContact.department).all()
+    depts = [d[0] for d in db.query(Content.department).filter(Content.department != None).distinct().order_by(Content.department).all()]
+    return templates.TemplateResponse("customers.html", {
+        "request": request, "user": get_user(request),
+        "contacts": contacts, "depts": depts, "msg": "",
+    })
+
+@app.post("/customers/add")
+def customers_add(request: Request,
+    department: str = Form(""), contact_name: str = Form(""),
+    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    if department:
+        db.add(CustomerContact(department=department, contact_name=contact_name or None,
+            phone=phone or None, email=email or None, note=note or None))
+        db.commit()
+    return RedirectResponse("/customers", 302)
+
+@app.post("/customers/edit/{cid}")
+def customers_edit(request: Request, cid: int,
+    department: str = Form(""), contact_name: str = Form(""),
+    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    c = db.query(CustomerContact).filter_by(id=cid).first()
+    if c:
+        c.department = department or c.department
+        c.contact_name = contact_name or None
+        c.phone = phone or None
+        c.email = email or None
+        c.note = note or None
+        db.commit()
+    return RedirectResponse("/customers", 302)
+
+@app.post("/customers/delete/{cid}")
+def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
+    require_admin(request)
+    db.query(CustomerContact).filter_by(id=cid).delete()
+    db.commit()
+    return RedirectResponse("/customers", 302)
+
+# ── 스튜디오 대관료 관리 ──────────────────────────
+@app.get("/studio", response_class=HTMLResponse)
+def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
+    require_admin(request)
+    q = db.query(StudioRental).filter_by(year=year)
+    if month: q = q.filter_by(month=month)
+    rentals = q.order_by(StudioRental.usage_date).all()
+    months = [m[0] for m in db.query(StudioRental.month).filter_by(year=year)
+              .filter(StudioRental.month != None).distinct().all()]
+    months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
+    # 월별 소계
+    monthly = {}
+    for r in db.query(StudioRental).filter_by(year=year).all():
+        key = r.month or "-"
+        monthly.setdefault(key, {"hours": 0, "amount": 0})
+        monthly[key]["hours"]  += r.hours or 0
+        monthly[key]["amount"] += (r.hours or 0) * (r.unit_price or 45000)
+    return templates.TemplateResponse("studio.html", {
+        "request": request, "user": get_user(request),
+        "year": year, "month": month, "rentals": rentals,
+        "months": months, "MONTHS": MONTHS, "monthly": monthly,
+    })
+
+@app.post("/studio/add")
+def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
+    usage_date: str = Form(""), hours: str = Form(""),
+    unit_price: str = Form("45000"), notes: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    try:
+        ud = date.fromisoformat(usage_date) if usage_date else None
+        m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
+        if ud and hours:
+            db.add(StudioRental(year=year, month=m, usage_date=ud,
+                hours=int(hours), unit_price=int(unit_price) if unit_price else 45000,
+                notes=notes or None))
+            db.commit()
+    except Exception: pass
+    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
+
+@app.post("/studio/delete/{rid}")
+def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    r = db.query(StudioRental).filter_by(id=rid).first()
+    m = r.month if r else month
+    db.query(StudioRental).filter_by(id=rid).delete()
+    db.commit()
+    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
+
 # ── 문서 생성 (관리자) ────────────────────────────
 @app.get("/documents", response_class=HTMLResponse)
-def documents_page(request: Request, year: int = 2026, dept: str = "", db: Session = Depends(get_db)):
+def documents_page(request: Request, year: int = 2026, dept: str = "", month: str = "",
+                   db: Session = Depends(get_db)):
     require_admin(request)
-    depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
-    q = db.query(Content.department,
-                 func.count().label("total"),
-                 func.sum(Content.session_count).label("sessions"),
-                 func.sum(Content.chapter_count).label("chapters"))\
-        .filter_by(year=year).filter(Content.department != None)
-    if dept: q = q.filter_by(department=dept)
-    dept_summary = q.group_by(Content.department).order_by(Content.department).all()
-    history = db.query(Document).order_by(Document.created_at.desc()).limit(20).all()
+    depts = [d[0] for d in db.query(Content.department).filter_by(year=year)
+             .filter(Content.department != None).distinct().order_by(Content.department).all()]
+    billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year)
+                      .filter(Content.billing_month != None).distinct().all()]
+    billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
+    # 선택된 부서+월의 과정 미리보기
+    preview = []
+    if dept and month:
+        preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month).all()
     return templates.TemplateResponse("documents.html", {
         "request": request, "user": get_user(request),
         "year": year, "depts": depts, "dept": dept,
-        "dept_summary": dept_summary, "history": history,
+        "billing_months": billing_months, "month": month,
+        "preview": preview, "MONTHS": MONTHS,
     })

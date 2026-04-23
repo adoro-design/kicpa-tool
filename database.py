@@ -89,6 +89,30 @@ class Document(Base):
     created_by = Column(Integer)
     created_at = Column(DateTime, server_default=func.now())
 
+class StudioRental(Base):
+    """월별 스튜디오 대관료 사용 내역"""
+    __tablename__ = "kicpa_studio_rental"
+    id         = Column(Integer, primary_key=True, index=True)
+    year       = Column(SmallInteger, default=2026, index=True)
+    month      = Column(String(20), index=True)   # "3월" 형식
+    usage_date = Column(Date, nullable=False)
+    hours      = Column(Integer, nullable=False)
+    unit_price = Column(Integer, default=45000)   # 원/시간, VAT별도
+    notes      = Column(String(200))
+    created_at = Column(DateTime, server_default=func.now())
+
+class CustomerContact(Base):
+    """부서별 한공회 고객담당자 정보"""
+    __tablename__ = "kicpa_customer_contacts"
+    id           = Column(Integer, primary_key=True, index=True)
+    department   = Column(String(100), nullable=False, index=True)
+    contact_name = Column(String(100))
+    phone        = Column(String(50))
+    email        = Column(String(200))
+    note         = Column(String(200))
+    is_active    = Column(Boolean, default=True)
+    created_at   = Column(DateTime, server_default=func.now())
+
 def init_db():
     """테이블 생성 + 기본 데이터"""
     if os.getenv("RESET_DB") == "true":
