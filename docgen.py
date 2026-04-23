@@ -182,10 +182,10 @@ def gen_pnl_excel(courses, dept, month_str, year, price_tbl,
     ws['I8'] = calc_revenue(courses, price_tbl)
     ws['D10'] = ps; ws['D10'].number_format = 'YYYY-MM-DD'
     ws['E10'] = pe; ws['E10'].number_format = 'YYYY-MM-DD'
-    ws['F10'] = pm_rate
+    ws['F10'] = pm_rate; ws['F10'].number_format = '0%'
     ws['D11'] = ps; ws['D11'].number_format = 'YYYY-MM-DD'
     ws['E11'] = pe; ws['E11'].number_format = 'YYYY-MM-DD'
-    ws['F11'] = prod_rate
+    ws['F11'] = prod_rate; ws['F11'].number_format = '0%' 
     ws['D17'] = STUDIO_UNIT_PRICE if include_studio else 0
     ws['E17'] = studio_hours       if include_studio else 0
     ws['E32'] = MONTHLY_SALARY
@@ -235,8 +235,10 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                 13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
         for col, val in vals.items():
             cell = ws.cell(r, col, val)
+            hdr = ws.cell(tds - 1, col)
+            if hdr.border: cell.border = copy(hdr.border)
             if col == 8 and isinstance(val, date): cell.number_format = 'YYYY-MM-DD'
-            if col == 12: cell.number_format = '#,##0'
+            if col in (12, 13, 14): cell.number_format = '#,##0'
 
     tr = tds + n; er = tr - 1
     ws.cell(tr, 1, "전체 합계")
