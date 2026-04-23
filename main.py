@@ -41,16 +41,23 @@ def clean_name(name):
 
 def normalize_month(val):
     """다양한 월 표기를 'X월' 형식으로 통일
-    예: '4' → '4월', '04' → '4월', '4월 ' → '4월', '4월청구' → '4월'
+    예: '4' → '4월', '04' → '4월', '4월 ' → '4월', '4월청구' → '4월', '5월 청구' → '5월'
     """
     if not val: return None
     s = str(val).strip()
-    m = re.search(r'\b(\d{1,2})월?\b', s)
+    # 'X월' 패턴 먼저 탐색 (예: '5월 청구', '5월청구', '12월')
+    m = re.search(r'(\d{1,2})월', s)
     if m:
         num = int(m.group(1))
         if 1 <= num <= 12:
             return f"{num}월"
-    return s
+    # 순수 숫자만 있는 경우 (예: '5', '05')
+    m = re.match(r'^(\d{1,2})$', s)
+    if m:
+        num = int(m.group(1))
+        if 1 <= num <= 12:
+            return f"{num}월"
+    return s  # 매칭 안 되면 원본 반환
 
 templates.env.filters["fmt_date"] = fmt_date
 templates.env.filters["clean_name"] = clean_name
@@ -151,13 +158,22 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
 
 # ── 콘텐츠 등록/수정 ──────────────────────────────
 @app.get("/content/edit", response_class=HTMLResponse)
-def content_edit_page(request: Request, id: int = 0, db: Session = Depends(get_db)):
+def content_edit_page(request: Request, id: int = 0,
+                      f_page: int = 1, f_dept: str = "", f_month: str = "",
+                      f_fmt: str = "", f_billing: str = "", f_search: str = "",
+                      db: Session = Depends(get_db)):
     require_login(request)
     row = db.query(Content).filter_by(id=id).first() if id else None
-    return templates.TemplateResponse("content_edit.html", {"request": request, "user": get_user(request), "row": row, "MONTHS": MONTHS, "msg": ""})
+    return templates.TemplateResponse("content_edit.html", {
+        "request": request, "user": get_user(request), "row": row, "MONTHS": MONTHS, "msg": "",
+        "f_page": f_page, "f_dept": f_dept, "f_month": f_month,
+        "f_fmt": f_fmt, "f_billing": f_billing, "f_search": f_search,
+    })
 
 @app.post("/content/edit")
 def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026),
+    f_page: int = Form(1), f_dept: str = Form(""), f_month: str = Form(""),
+    f_fmt: str = Form(""), f_billing: str = Form(""), f_search: str = Form(""),
     shooting_month: str=Form(""), course_name: str=Form(""), required_optional: str=Form(""),
     original_code: str=Form(""), category: str=Form(""), course_code: str=Form(""),
     session_count: str=Form(""), chapter_count: str=Form(""),
@@ -200,7 +216,14 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     else:
         db.add(Content(year=year, **data))
     db.commit()
-    return RedirectResponse("/contents?year=" + str(year), 302)
+    from urllib.parse import urlencode
+    params = {"year": year, "page": f_page}
+    if f_dept:    params["dept"]    = f_dept
+    if f_month:   params["month"]   = f_month
+    if f_fmt:     params["fmt"]     = f_fmt
+    if f_billing: params["billing"] = f_billing
+    if f_search:  params["search"]  = f_search
+    return RedirectResponse("/contents?" + urlencode(params), 302)
 
 # ── 촬영 일정 ─────────────────────────────────────
 @app.get("/schedule", response_class=HTMLResponse)

@@ -85,7 +85,7 @@
             </td>
             {% if user and user.role == 'admin' %}
             <td>
-              <a href="/content/edit?id={{ r.id }}" class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;">수정</a>
+              <a href="/content/edit?id={{ r.id }}&f_page={{ page }}&f_dept={{ dept }}&f_month={{ month }}&f_fmt={{ fmt }}&f_billing={{ billing }}&f_search={{ search }}" class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;">수정</a>
             </td>
             {% endif %}
           </tr>

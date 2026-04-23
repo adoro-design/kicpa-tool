@@ -8,7 +8,7 @@
   <input type="hidden" name="year" value="{{ year }}">
   <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
     <option value="">전체 청구월</option>
-    {% for m in billing_months %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    {% for m in billing_months %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m | normalize_month }}</option>{% endfor %}
   </select>
   <select name="dept" class="form-select" style="width:auto;" onchange="this.form.submit()">
     <option value="">전체 부서</option>
@@ -105,8 +105,8 @@
         {% set amt = price * (r.session_count or 0) + travel %}
         {% set total_amt.val = total_amt.val + amt %}
         <tr>
-          <td><span class="badge-billing-month">{{ r.billing_month or '-' }}</span></td>
-          <td><span class="badge-shoot-month">{{ r.shooting_month or '-' }}</span></td>
+          <td><span class="badge-billing-month">{{ (r.billing_month | normalize_month) or '-' }}</span></td>
+          <td><span class="badge-shoot-month">{{ (r.shooting_month | normalize_month) or '-' }}</span></td>
           <td style="max-width:220px; font-size:.84rem;">
             <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ r.course_name }}">
               {{ r.course_name | clean_name }}
