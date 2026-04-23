@@ -1,27 +1,31 @@
 """
-docgen.py — 문서 자동 생성 모듈
+docgen.py — 문서 자동 생성 모듈 (템플릿 기반)
 손익분석서(xlsx) / 프로젝트 프로파일(docx) / 개발요청서(docx + xlsx)
 """
-import io, re, calendar, zipfile
+import io, re, calendar, zipfile, os
+from copy import copy
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import Optional
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from docx import Document as DocxDocument
-from docx.shared import Pt, Cm, RGBColor
+from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'doc_templates')
+
 # ── 상수 ──────────────────────────────────────────────────────────────
 MONTHLY_SALARY    = 8_850_000
-PM_RATE           = 0.01
+PM_RATE           = 0.01      # 기본 참여율 (조정 가능)
 PROD_RATE         = 0.15
 STUDIO_UNIT_PRICE = 45_000
+TARGET_PROFIT     = 0.40      # 최소 손익률
 
 PRICE_NEW       = 500_000
 PRICE_PORTING   = 50_000
@@ -32,12 +36,11 @@ PM_NAME    = "이상현"
 PROD_NAME  = "염왕도"
 DEPT_CODE  = "SS"
 DEPT_FULL  = "에듀테크서비스본부"
-COMPANY_NAME = "㈜디유넷"
-COMPANY_ADDR = "서울 서대문구 충정로3가 139"
-COMPANY_CEO  = "김평국"
-CLIENT_NAME  = "공인회계사회 회계연수원"
-CLIENT_ADDR  = "서울 서대문구 충정로 2가 185-10"
-CLIENT_CEO   = "최운열"
+COMPANY_NAME  = "㈜디유넷"
+COMPANY_ADDR  = "서울 서대문구 충정로3가 139"
+COMPANY_CEO   = "김평국"
+CLIENT_ADDR   = "서울 서대문구 충정로 2가 185-10"
+CLIENT_CEO    = "최운열"
 DELIVERY_PLACE = "한국공인회계사회"
 
 # ── 날짜 헬퍼 ─────────────────────────────────────────────────────────
@@ -66,28 +69,21 @@ def get_month_number(month_str: str) -> int:
     m = re.search(r'(\d{1,2})월', str(month_str or ""))
     return int(m.group(1)) if m else 1
 
-def fmt_kr(d: date) -> str:
-    """2026. 03. 04"""
-    return f"{d.year}. {d.month:02d}. {d.day:02d}"
-
-def fmt_kr2(d: date) -> str:
-    """2026년 03월 04일"""
-    return f"{d.year}년 {d.month:02d}월 {d.day:02d}일"
+def fmt_kr(d: date) -> str:   return f"{d.year}. {d.month:02d}. {d.day:02d}"
+def fmt_kr2(d: date) -> str:  return f"{d.year}년 {d.month:02d}월 {d.day:02d}일"
+def fmt_short(d: date) -> str:
+    return f"{str(d.year)[2:]}.{d.month:02d}.{d.day:02d}"
 
 # ── 단가 헬퍼 ─────────────────────────────────────────────────────────
 def classify_fmt(fmt: str):
-    """(is_new, is_porting, is_edit_porting)"""
-    if not fmt:
-        return True, False, False
+    if not fmt: return True, False, False
     if "포팅" in fmt:
-        if "편집" in fmt and "무편집" not in fmt:
-            return False, True, True
+        if "편집" in fmt and "무편집" not in fmt: return False, True, True
         return False, True, False
     return True, False, False
 
 def get_unit_price_for(content_row, price_tbl: dict) -> int:
-    if content_row.custom_price:
-        return content_row.custom_price
+    if content_row.custom_price: return content_row.custom_price
     fmt = content_row.shooting_format or ""
     if "포팅" in fmt:
         if "편집" in fmt and "무편집" not in fmt:
@@ -96,17 +92,13 @@ def get_unit_price_for(content_row, price_tbl: dict) -> int:
     if "출장" in fmt:
         return price_tbl.get("FullVod (출장)", PRICE_NEW) or PRICE_NEW
     for k, v in price_tbl.items():
-        if k and k in fmt:
-            return v or 0
+        if k and k in fmt: return v or 0
     return PRICE_NEW
 
 def get_travel_for(content_row, travel_rate: int = PRICE_TRAVEL_HR) -> int:
-    if not content_row.shooting_format or "출장" not in content_row.shooting_format:
-        return 0
-    if content_row.travel_expense is not None:
-        return content_row.travel_expense
-    if content_row.travel_hours:
-        return content_row.travel_hours * travel_rate
+    if not content_row.shooting_format or "출장" not in content_row.shooting_format: return 0
+    if content_row.travel_expense is not None: return content_row.travel_expense
+    if content_row.travel_hours: return content_row.travel_hours * travel_rate
     return travel_rate
 
 # ── 공통 계산 ─────────────────────────────────────────────────────────
@@ -117,27 +109,6 @@ def calc_period(courses, year: int, month_num: int):
     e = max(ends)   if ends   else get_next_month_5th_weekday(year, month_num)
     return s, e
 
-def calc_labor(ps: date, pe: date, year: int, month_num: int):
-    m_start = date(year, month_num, 1)
-    m_end   = date(year, month_num, calendar.monthrange(year, month_num)[1])
-    total_wd  = get_weekday_count(m_start, m_end)
-    period_wd = get_weekday_count(ps, pe)
-    ratio = period_wd / max(total_wd, 1)
-    return (round(PM_RATE * MONTHLY_SALARY * ratio),
-            round(PROD_RATE * MONTHLY_SALARY * ratio),
-            period_wd, total_wd)
-
-def build_project_name(courses) -> str:
-    new_s  = sum(c.session_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[0])
-    prt_c  = sum(c.chapter_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[1]
-                 and not classify_fmt(c.shooting_format or "")[2])
-    eprt_c = sum(c.chapter_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[2])
-    parts  = []
-    if new_s:  parts.append(f"신규{new_s}차시")
-    if prt_c:  parts.append(f"포팅{prt_c}챕터")
-    if eprt_c: parts.append(f"편집포팅{eprt_c}챕터")
-    return f"한국공인회계사 콘텐츠 개발({'·'.join(parts) if parts else '신규'})"
-
 def calc_revenue(courses, price_tbl: dict) -> int:
     tr = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
     return sum(
@@ -146,187 +117,117 @@ def calc_revenue(courses, price_tbl: dict) -> int:
         for c in courses
     )
 
+def calc_labor_amounts(ps: date, pe: date, pm_rate: float, prod_rate: float):
+    """템플릿 공식과 동일: (pe-ps).days / 30 × rate × 월인건비 + 1"""
+    d = (pe - ps).days
+    pm_a   = round(d / 30 * pm_rate   * MONTHLY_SALARY + 1)
+    prod_a = round(d / 30 * prod_rate * MONTHLY_SALARY + 1)
+    return pm_a, prod_a
+
+def adjust_rates(revenue: int, studio_a: int, ps: date, pe: date) -> tuple:
+    """손익률 40% 이상이 되도록 참여율 자동 조정. 두 문서에 동일 적용."""
+    pm_a, prod_a = calc_labor_amounts(ps, pe, PM_RATE, PROD_RATE)
+    total_cost   = pm_a + prod_a + studio_a
+    if revenue > 0 and (revenue - total_cost) / revenue >= TARGET_PROFIT:
+        return PM_RATE, PROD_RATE  # 기본 비율로 달성
+
+    # 비율 축소
+    max_labor = (1 - TARGET_PROFIT) * revenue - studio_a - 2
+    period_d  = (pe - ps).days
+    base_labor = period_d / 30 * (PM_RATE + PROD_RATE) * MONTHLY_SALARY
+    if max_labor <= 0 or base_labor <= 0:
+        return PM_RATE, PROD_RATE
+    scale     = max_labor / base_labor
+    new_pm    = max(round(PM_RATE   * scale, 4), 0.001)
+    new_prod  = max(round(PROD_RATE * scale, 4), 0.001)
+    return new_pm, new_prod
+
+def build_project_name(courses) -> str:
+    new_s  = sum(c.session_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[0])
+    prt_c  = sum(c.chapter_count or 0 for c in courses
+                 if classify_fmt(c.shooting_format or "")[1]
+                 and not classify_fmt(c.shooting_format or "")[2])
+    eprt_c = sum(c.chapter_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[2])
+    parts  = []
+    if new_s:  parts.append(f"신규{new_s}차시")
+    if prt_c:  parts.append(f"포팅{prt_c}챕터")
+    if eprt_c: parts.append(f"편집포팅{eprt_c}챕터")
+    return f"한국공인회계사 콘텐츠 개발({'·'.join(parts) if parts else '신규'})"
+
+# ── openpyxl 스타일 복사 헬퍼 ─────────────────────────────────────────
+def _copy_cell_style(src, dst):
+    dst.font        = copy(src.font)
+    dst.border      = copy(src.border)
+    dst.fill        = copy(src.fill)
+    dst.number_format = src.number_format
+    dst.alignment   = copy(src.alignment)
+
+# ── Word 텍스트 치환 헬퍼 ─────────────────────────────────────────────
+def _replace_para(para, old: str, new: str) -> bool:
+    """단락 전체 텍스트에서 old→new 치환. 첫 번째 런에 모아서 처리."""
+    full = para.text
+    if old not in full:
+        return False
+    replaced = full.replace(old, new)
+    if para.runs:
+        para.runs[0].text = replaced
+        for run in para.runs[1:]:
+            run.text = ""
+    else:
+        para.add_run(replaced)
+    return True
+
+def _replace_doc(doc, old: str, new: str):
+    """문서 전체(단락 + 표 셀)에서 텍스트 치환"""
+    for para in doc.paragraphs:
+        _replace_para(para, old, new)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    _replace_para(para, old, new)
+
+
 # ═══════════════════════════════════════════════════════════════════════
-# 1. 손익분석서 (Excel)
+# 1. 손익분석서 (Excel) — 템플릿 기반
 # ═══════════════════════════════════════════════════════════════════════
 def gen_pnl_excel(courses, dept: str, month_str: str, year: int,
-                  price_tbl: dict, studio_hours: int, include_studio: bool) -> bytes:
+                  price_tbl: dict, studio_hours: int, include_studio: bool,
+                  pm_rate: float, prod_rate: float) -> bytes:
     month_num = get_month_number(month_str)
     ps, pe    = calc_period(courses, year, month_num)
-    pm_a, prod_a, pwd, twd = calc_labor(ps, pe, year, month_num)
     write_dt  = get_last_business_day(year, month_num)
     revenue   = calc_revenue(courses, price_tbl)
     studio_a  = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
-    labor_tot = pm_a + prod_a
-    exp_tot   = studio_a
-    cost_tot  = labor_tot + exp_tot
-    profit    = revenue - cost_tot
-    profit_r  = profit / revenue if revenue else 0
-    outsrc_r  = exp_tot / revenue if revenue else 0
     proj_name = build_project_name(courses)
 
-    wb = openpyxl.Workbook()
+    wb = openpyxl.load_workbook(os.path.join(TEMPLATE_DIR, 'tpl_pnl.xlsx'))
     ws = wb.active
-    ws.title = "손익분석서_V1.0"
 
-    # 열 너비
-    for col, w in zip("ABCDEFGHI", [14, 20, 12, 13, 13, 8, 8, 14, 16]):
-        ws.column_dimensions[col].width = w
+    # 프로젝트명 & 작성일
+    ws['F3'] = proj_name
+    ws['F4'] = write_dt
+    ws['F4'].number_format = 'YYYY"년" MM"월" DD"일"'
 
-    thin   = Side(style="thin", color="AAAAAA")
-    bd     = Border(top=thin, bottom=thin, left=thin, right=thin)
-    C      = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    R      = Alignment(horizontal="right",  vertical="center")
-    L      = Alignment(horizontal="left",   vertical="center", wrap_text=True)
-    BL     = PatternFill("solid", start_color="2F5496")
-    GR     = PatternFill("solid", start_color="D9E1F2")
-    NUM    = '#,##0'
-    PCT    = '0.0%'
-    DT     = 'YYYY-MM-DD'
+    # 매출
+    ws['I8'] = revenue
 
-    def mc(r, c1, c2=None, val=None, bold=False, sz=9, color="000000", fill=None, align=None, fmt=None):
-        """merge + style 헬퍼"""
-        if c2 and c2 > c1:
-            ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
-        cell = ws.cell(r, c1, val)
-        cell.font      = Font(bold=bold, size=sz, color=color)
-        cell.alignment = align or C
-        cell.border    = bd
-        if fill: cell.fill = fill
-        if fmt:  cell.number_format = fmt
-        for col in range(c1+1, (c2 or c1)+1):
-            ws.cell(r, col).border = bd
-        return cell
+    # PM 인건비
+    ws['D10'] = ps;  ws['D10'].number_format = 'YYYY-MM-DD'
+    ws['E10'] = pe;  ws['E10'].number_format = 'YYYY-MM-DD'
+    ws['F10'] = pm_rate
 
-    def cv(r, c, val, bold=False, fmt=None, align=None):
-        cell = ws.cell(r, c, val)
-        cell.font      = Font(bold=bold, size=9)
-        cell.border    = bd
-        cell.alignment = align or L
-        if fmt: cell.number_format = fmt
-        return cell
+    # 촬영편집 인건비
+    ws['D11'] = ps;  ws['D11'].number_format = 'YYYY-MM-DD'
+    ws['E11'] = pe;  ws['E11'].number_format = 'YYYY-MM-DD'
+    ws['F11'] = prod_rate
 
-    # ── 제목 ──
-    r = 1
-    ws.row_dimensions[r].height = 22
-    mc(r, 1, 9, f"{year} 손익분석서  ", bold=True, sz=13, align=C)
-    r += 1
+    # 스튜디오 대관 (직접경비)
+    ws['D17'] = STUDIO_UNIT_PRICE if include_studio else 0
+    ws['E17'] = studio_hours       if include_studio else 0
 
-    # 메타 4행
-    for label, value, vfmt in [
-        ("버전", 1, None),
-        ("프로젝트명", proj_name, None),
-        ("작성일", write_dt, DT),
-        ("작성자", PM_NAME, None),
-    ]:
-        mc(r, 1, 4, label, bold=True, align=C)
-        cell = mc(r, 5, 9, value, align=L)
-        if vfmt: cell.number_format = vfmt
-        r += 1
-
-    r += 1  # 공백
-
-    # ── 컬럼 헤더 ──
-    mc(r, 1, 3, "항   목", bold=True, color="FFFFFF", fill=BL)
-    mc(r, 4, 8, "내   역", bold=True, color="FFFFFF", fill=BL)
-    mc(r, 9, 9, "금액(VAT별도)", bold=True, color="FFFFFF", fill=BL)
-    r += 1
-
-    # ── 매출 ──
-    mc(r, 1, 3, "매출①", bold=True)
-    mc(r, 4, 8, "")
-    cv(r, 9, revenue, bold=True, fmt=NUM, align=R)
-    r += 1
-
-    # ── 직접인건비 제목 ──
-    mc(r, 1, 1, "직접\n인건비", bold=True, fill=GR)
-    ws.row_dimensions[r].height = 28
-    for ci, h in enumerate(["역할","성명","시작일시","종료일시","비율","본부","단가","금액"], 2):
-        mc(r, ci, ci, h, bold=True, fill=GR, align=C)
-    r += 1
-
-    # PM
-    ws.cell(r, 1).border = bd
-    for ci, (v, fmt, al) in enumerate([
-        ("PM",     None, C), (PM_NAME, None, C),
-        (ps, DT, C), (pe, DT, C),
-        (PM_RATE, PCT, C), (DEPT_CODE, None, C),
-        (MONTHLY_SALARY, NUM, R), (pm_a, NUM, R),
-    ], 2):
-        cv(r, ci, v, fmt=fmt, align=al)
-    r += 1
-
-    # 촬영편집
-    ws.cell(r, 1).border = bd
-    for ci, (v, fmt, al) in enumerate([
-        ("영상촬영 및 편집, 포팅", None, L), (PROD_NAME, None, C),
-        (ps, DT, C), (pe, DT, C),
-        (PROD_RATE, PCT, C), (DEPT_CODE, None, C),
-        (MONTHLY_SALARY, NUM, R), (prod_a, NUM, R),
-    ], 2):
-        cv(r, ci, v, fmt=fmt, align=al)
-    r += 1
-
-    # 인건비 소계
-    mc(r, 1, 8, "직접인건비 소계", bold=True,
-       align=Alignment(horizontal="right", vertical="center"))
-    cv(r, 9, labor_tot, bold=True, fmt=NUM, align=R)
-    r += 1
-
-    # ── 직접경비 ──
-    mc(r, 1, 1, "직접경비", bold=True, fill=GR)
-    ws.row_dimensions[r].height = 20
-    for ci, h in enumerate(["구분","담당","단가","투입","단위","본부","비고","금액"], 2):
-        mc(r, ci, ci, h, bold=True, fill=GR, align=C)
-    r += 1
-
-    if include_studio and studio_hours > 0:
-        ws.cell(r, 1).border = bd
-        for ci, (v, fmt, al) in enumerate([
-            ("스튜디오 대관", None, C), ("주승돈", None, C),
-            (STUDIO_UNIT_PRICE, NUM, R), (studio_hours, None, C),
-            ("", None, C), (DEPT_CODE, None, C),
-            ("", None, C), (studio_a, NUM, R),
-        ], 2):
-            cv(r, ci, v, fmt=fmt, align=al)
-        r += 1
-    else:
-        mc(r, 2, 9, "")
-        r += 1
-
-    # 경비 소계
-    mc(r, 1, 8, "직접경비 소계", bold=True,
-       align=Alignment(horizontal="right", vertical="center"))
-    cv(r, 9, exp_tot, bold=True, fmt=NUM, align=R)
-    r += 1
-
-    # ── 손익 요약 ──
-    for label, value, fmt in [
-        ("비용 합계②", cost_tot, NUM),
-        ("외주율",      outsrc_r, PCT),
-        ("손익(①-②)", profit,   NUM),
-        ("손익률",      profit_r, PCT),
-    ]:
-        mc(r, 1, 8, label, bold=True,
-           align=Alignment(horizontal="right", vertical="center"))
-        cv(r, 9, value, bold=True, fmt=fmt, align=R)
-        r += 1
-
-    r += 1  # 공백
-
-    # ── 본부별 배분 ──
-    for ci, h in enumerate(["구분","코드","본부별배분","본부별 월 인건비"], 2):
-        mc(r, ci, ci, h, bold=True, color="FFFFFF", fill=BL, align=C)
-    ws.cell(r, 1).border = bd
-    r += 1
-
-    for label, code, distr in [(DEPT_FULL, DEPT_CODE, cost_tot), ("총합", "TOT", cost_tot)]:
-        ws.cell(r, 1).border = bd
-        cv(r, 2, label, align=L)
-        cv(r, 3, code,  align=C)
-        cv(r, 4, distr, fmt=NUM, align=R)
-        cv(r, 5, MONTHLY_SALARY, fmt=NUM, align=R)
-        r += 1
+    # 월 인건비 기준 (수식 참조용)
+    ws['E32'] = MONTHLY_SALARY
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -334,121 +235,78 @@ def gen_pnl_excel(courses, dept: str, month_str: str, year: int,
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 2. 개발요청서 Excel 첨부
+# 2. 개발요청서 Excel 첨부 — 템플릿 기반
 # ═══════════════════════════════════════════════════════════════════════
 def gen_devreq_excel(courses, dept: str, month_str: str, year: int,
                      price_tbl: dict) -> bytes:
     month_num = get_month_number(month_str)
-    wb = openpyxl.Workbook()
+    write_dt  = get_last_business_day(year, month_num)
 
-    # ── Sheet1: 콘텐츠개발내역 ──
-    ws1 = wb.active
-    ws1.title = "콘텐츠개발내역"
+    wb = openpyxl.load_workbook(os.path.join(TEMPLATE_DIR, 'tpl_devreq.xlsx'))
+    ws = wb['콘텐츠개발내역']
 
-    hfill = PatternFill("solid", start_color="2F5496")
-    thin  = Side(style="thin", color="AAAAAA")
-    bd    = Border(top=thin, bottom=thin, left=thin, right=thin)
-    C     = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    R     = Alignment(horizontal="right",  vertical="center")
-    NUM   = '#,##0'
+    # 헤더 업데이트
+    ws['A1'] = f"{month_num}월 콘텐츠 개발 내역"
+    ws['N1'] = f"작성일 : {write_dt.strftime('%Y-%m-%d')}"
+    ws['A2'] = f"* {dept}"
 
-    ws1.merge_cells("A1:N1")
-    ws1["A1"] = f"{month_num}월 콘텐츠 개발 내역"
-    ws1["A1"].font = Font(bold=True, size=12)
-    ws1["A1"].alignment = Alignment(horizontal="left", vertical="center")
-    ws1.row_dimensions[1].height = 22
+    # 기존 데이터 행 개수 파악 (row 4부터 합계행 전까지)
+    tpl_data_start = 4
+    tpl_total_row  = tpl_data_start
+    while ws.cell(tpl_total_row, 1).value != '전체 합계':
+        tpl_total_row += 1
+    tpl_data_count = tpl_total_row - tpl_data_start
 
-    ws1.merge_cells("A2:N2")
-    ws1["A2"] = f"* {dept}"
-    ws1["A2"].font = Font(bold=True, size=10)
+    # 스타일 참조용 셀 저장 (첫 데이터 행)
+    style_row = tpl_data_start
 
-    headers = ["연번","구분","강좌명","강사명","강사소속","시간(차시)","챕터수",
-               "등록일\n(수정일)","제작유형","단가기준 유형","퀴즈","단가","금액","총액(VAT 포함)"]
-    col_w = [5, 8, 35, 12, 12, 8, 8, 12, 10, 10, 6, 12, 12, 14]
-    for i, (h, w) in enumerate(zip(headers, col_w), 1):
-        ws1.column_dimensions[get_column_letter(i)].width = w
-        cell = ws1.cell(3, i, h)
-        cell.font      = Font(bold=True, color="FFFFFF", size=9)
-        cell.fill      = hfill
-        cell.alignment = C
-        cell.border    = bd
-    ws1.row_dimensions[3].height = 32
+    n = len(courses)
 
+    # 행 수 조정
+    if n > tpl_data_count:
+        ws.insert_rows(tpl_total_row, n - tpl_data_count)
+    elif n < tpl_data_count:
+        ws.delete_rows(tpl_data_start + n, tpl_data_count - n)
+
+    # 새 데이터 작성
     tr = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
-    total_sessions = total_chapters = total_amount = 0
-    for idx, c in enumerate(courses, 1):
+    for idx, c in enumerate(courses):
+        r = tpl_data_start + idx
         is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
-        구분    = "포팅" if (is_p or is_ep) else "신규"
-        unit_p  = get_unit_price_for(c, price_tbl)
-        qty     = c.session_count or c.chapter_count or 0
-        amount  = unit_p * qty + get_travel_for(c, tr)
-        fmt_name = c.shooting_format or ""
+        unit_p = get_unit_price_for(c, price_tbl)
+        qty    = c.session_count if not (is_p or is_ep) else c.chapter_count or 0
 
-        row_data = [idx, 구분, c.course_name, c.instructor, "",
-                    c.session_count or "", c.chapter_count or "",
-                    c.open_date or "", fmt_name, fmt_name,
-                    "", unit_p, amount, round(amount * 1.1)]
+        row_vals = {
+            1: idx + 1,
+            2: "포팅" if (is_p or is_ep) else "신규",
+            3: c.course_name,
+            4: c.instructor,
+            5: "",
+            6: c.session_count or "",
+            7: c.chapter_count or "",
+            8: c.open_date,
+            9: c.shooting_format or "",
+            10: c.shooting_format or "",
+            11: "",
+            12: unit_p,
+            13: f"=L{r}*F{r}",
+            14: f"=M{r}*1.1",
+        }
+        for col, val in row_vals.items():
+            cell = ws.cell(r, col, val)
+            if col == 8 and isinstance(val, date):
+                cell.number_format = 'YYYY-MM-DD'
+            if col == 12:
+                cell.number_format = '#,##0'
 
-        total_sessions += c.session_count or 0
-        total_chapters += c.chapter_count or 0
-        total_amount   += amount
-
-        for ci, v in enumerate(row_data, 1):
-            cell = ws1.cell(idx + 3, ci, v)
-            cell.font      = Font(size=9)
-            cell.border    = bd
-            cell.alignment = C if ci in (1, 2, 6, 7, 8, 9, 10, 11) else \
-                             R if ci in (12, 13, 14) else \
-                             Alignment(horizontal="left", vertical="center")
-            if ci in (12, 13, 14): cell.number_format = NUM
-            if ci == 8 and isinstance(v, date):
-                cell.number_format = "YYYY-MM-DD"
-
-    # 합계행
-    tr_row = len(courses) + 4
-    ws1.merge_cells(f"A{tr_row}:E{tr_row}")
-    ws1.cell(tr_row, 1, "전체 합계").font = Font(bold=True, size=9)
-    ws1.cell(tr_row, 1).alignment = C
-    ws1.cell(tr_row, 1).border = bd
-    for ci in range(2, 6):
-        ws1.cell(tr_row, ci).border = bd
-    for ci, v in [(6, total_sessions), (7, total_chapters),
-                  (13, total_amount), (14, round(total_amount * 1.1))]:
-        cell = ws1.cell(tr_row, ci, v)
-        cell.font      = Font(bold=True, size=9)
-        cell.border    = bd
-        cell.number_format = NUM
-        cell.alignment = C
-    for ci in [8, 9, 10, 11, 12]:
-        ws1.cell(tr_row, ci).border = bd
-
-    # ── Sheet2: 단가 ──
-    ws2 = wb.create_sheet("단가")
-    ws2.column_dimensions["B"].width = 30
-    ws2.column_dimensions["C"].width = 18
-    ws2.merge_cells("B1:D1")
-    ws2["B1"] = "콘텐츠 유형별 개발 단가"
-    ws2["B1"].font = Font(bold=True, size=10)
-
-    for r_idx, (label, val_) in enumerate([
-        ("콘텐츠유형", "단가(vat별도)/차시"),
-        ("크로마키",   500000), ("FullVod(출장)", 500000),
-        ("태블릿형",   500000), ("전자칠판형",    500000),
-        ("", ""),
-        ("외부과정 포팅 단가(삼일, 조세일보, 휴넷 등)", ""),
-        ("콘텐츠유형", "단가(vat별도)/챕터"),
-        ("포팅(동영상 무편집)", 50000), ("포팅(동영상 편집)", 160000),
-        ("", ""),
-        ("출장비(서울소재 - 촬영감독 1명)", ""),
-        ("기준시간(1일)", "단가(vat별도)/챕터"),
-        ("1~4시간", 100000), ("4시간 초과", "별도 협의"),
-    ], 2):
-        ws2.cell(r_idx, 2, label).font = Font(size=9)
-        c = ws2.cell(r_idx, 3, val_)
-        c.font = Font(size=9)
-        if isinstance(val_, int):
-            c.number_format = NUM
-            c.alignment = R
+    # 합계 행
+    total_row = tpl_data_start + n
+    end_row   = total_row - 1
+    ws.cell(total_row, 1, "전체 합계")
+    ws.cell(total_row, 6, f"=SUM(F{tpl_data_start}:F{end_row})")
+    ws.cell(total_row, 7, f"=SUM(G{tpl_data_start}:G{end_row})")
+    ws.cell(total_row, 13, f"=SUM(M{tpl_data_start}:M{end_row})").number_format = '#,##0'
+    ws.cell(total_row, 14, f"=SUM(N{tpl_data_start}:N{end_row})").number_format = '#,##0'
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -456,116 +314,30 @@ def gen_devreq_excel(courses, dept: str, month_str: str, year: int,
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 3. 개발요청서 Word
+# 3. 개발요청서 Word — 템플릿 기반 (텍스트 치환)
 # ═══════════════════════════════════════════════════════════════════════
-def _set_cell(cell, text, bold=False, size=10, align=WD_ALIGN_PARAGRAPH.LEFT,
-              bg_color=None):
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p = cell.paragraphs[0]
-    p.alignment = align
-    run = p.add_run(text)
-    run.bold = bold
-    run.font.size = Pt(size)
-    if bg_color:
-        tc   = cell._tc
-        tcPr = tc.get_or_add_tcPr()
-        shd  = OxmlElement("w:shd")
-        shd.set(qn("w:val"), "clear")
-        shd.set(qn("w:color"), "auto")
-        shd.set(qn("w:fill"), bg_color)
-        tcPr.append(shd)
-
-def _set_col_width(table, col_idx, width_cm):
-    for row in table.rows:
-        row.cells[col_idx].width = Cm(width_cm)
-
 def gen_devreq_docx(courses, dept: str, month_str: str, year: int,
                     ps: date, pe: date, write_dt: date) -> bytes:
-    month_num = get_month_number(month_str)
-    doc = DocxDocument()
+    doc = DocxDocument(os.path.join(TEMPLATE_DIR, 'tpl_devreq.docx'))
+    table = doc.tables[0]
 
-    # 페이지 여백
-    for section in doc.sections:
-        section.top_margin    = Cm(2.0)
-        section.bottom_margin = Cm(2.0)
-        section.left_margin   = Cm(2.5)
-        section.right_margin  = Cm(2.5)
+    # 시행일 (row 5, cells[1..3])
+    old_date = "2026년 03월 03일"
+    for cell in table.rows[5].cells[1:]:
+        for para in cell.paragraphs:
+            _replace_para(para, old_date, fmt_kr2(ps))
 
-    # ── 헤더 표 ──
-    tbl = doc.add_table(rows=7, cols=4)
-    tbl.style = "Table Grid"
-    tbl.autofit = False
-
-    # 행1: 제목 (병합)
-    row0 = tbl.rows[0]
-    row0.cells[0].merge(row0.cells[3])
-    _set_cell(row0.cells[0], "개  발  요  청  서", bold=True, size=14,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2")
-
-    # 행2: 발주처 / 개발사
-    for ci, txt in [(0, "발  주  처"), (2, "개  발  사")]:
-        tbl.rows[1].cells[ci].merge(tbl.rows[1].cells[ci+1])
-        _set_cell(tbl.rows[1].cells[ci], txt, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2")
-
-    # 행3~5: 발주처/개발사 정보
-    info = [
-        ("회사명", CLIENT_NAME, "회사명", COMPANY_NAME),
-        ("주소",   CLIENT_ADDR, "주소",   COMPANY_ADDR),
-        ("대표자", CLIENT_CEO,  "대표자", COMPANY_CEO),
+    # 본문 (row 7, all cells)
+    replacements = [
+        ("조세지원본부",   dept),
+        ("2026년 03월 04일", fmt_kr2(ps)),
+        ("2026년 03월 27일", fmt_kr2(pe)),
+        ("2026년 03월 16일", fmt_kr2(write_dt)),
     ]
-    for ri, (l1, v1, l2, v2) in enumerate(info, 2):
-        _set_cell(tbl.rows[ri].cells[0], l1, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2")
-        _set_cell(tbl.rows[ri].cells[1], v1, size=9)
-        _set_cell(tbl.rows[ri].cells[2], l2, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2")
-        _set_cell(tbl.rows[ri].cells[3], v2, size=9)
-
-    # 행6: 시행일
-    tbl.rows[5].cells[0].merge(tbl.rows[5].cells[1])
-    tbl.rows[5].cells[2].merge(tbl.rows[5].cells[3])
-    _set_cell(tbl.rows[5].cells[0], "시행일", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2")
-    _set_cell(tbl.rows[5].cells[2], fmt_kr2(write_dt), size=9,
-              align=WD_ALIGN_PARAGRAPH.CENTER)
-
-    # 행7: 제목
-    tbl.rows[6].cells[0].merge(tbl.rows[6].cells[1])
-    tbl.rows[6].cells[2].merge(tbl.rows[6].cells[3])
-    _set_cell(tbl.rows[6].cells[0], "제목", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2")
-    _set_cell(tbl.rows[6].cells[2], "교육콘텐츠 개발요청", size=9)
-
-    doc.add_paragraph()  # 간격
-
-    # ── 본문 ──
-    def add_para(text, bold=False, size=10, indent_cm=0):
-        p = doc.add_paragraph()
-        p.paragraph_format.left_indent = Cm(indent_cm)
-        run = p.add_run(text)
-        run.bold = bold
-        run.font.size = Pt(size)
-        return p
-
-    add_para(f"*{dept}", bold=True)
-    doc.add_paragraph()
-    add_para(f"● 개발기간 : {fmt_kr2(ps)} ~ {fmt_kr2(pe)}", indent_cm=1)
-    add_para(f"● 납품장소 : {DELIVERY_PLACE}", indent_cm=1)
-    doc.add_paragraph()
-    add_para("1. 귀 사의 일익 번창함을 기원합니다.", indent_cm=1)
-    add_para("2. 상기와 같이 동영상 제작을 요청하오니 기한 내에 납품하여 주시기 바랍니다.",
-             indent_cm=1)
-    doc.add_paragraph()
-
-    # 날짜 + 서명
-    p_date = doc.add_paragraph()
-    p_date.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_date.add_run(fmt_kr2(write_dt)).font.size = Pt(10)
-
-    p_sign = doc.add_paragraph()
-    p_sign.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_sign.add_run(DELIVERY_PLACE).bold = True
+    for cell in table.rows[7].cells:
+        for old, new in replacements:
+            for para in cell.paragraphs:
+                _replace_para(para, old, new)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -573,236 +345,195 @@ def gen_devreq_docx(courses, dept: str, month_str: str, year: int,
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 4. 프로젝트 프로파일 Word
+# 4. 프로젝트 프로파일 Word — python-docx 생성 (템플릿 손상으로 직접 생성)
 # ═══════════════════════════════════════════════════════════════════════
+def _cell(cell, text, bold=False, size=9, align=WD_ALIGN_PARAGRAPH.LEFT, bg=None):
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p = cell.paragraphs[0]
+    p.alignment = align
+    run = p.add_run(text)
+    run.bold      = bold
+    run.font.size = Pt(size)
+    if bg:
+        tc   = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd  = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), bg)
+        tcPr.append(shd)
+
+HDR_BG  = "D9E1F2"
+SUB_BG  = "F2F2F2"
+CTR = WD_ALIGN_PARAGRAPH.CENTER
+RGT = WD_ALIGN_PARAGRAPH.RIGHT
+
 def gen_profile_docx(courses, dept: str, month_str: str, year: int,
                      price_tbl: dict, studio_hours: int, include_studio: bool,
+                     pm_rate: float, prod_rate: float,
                      customer_contact=None) -> bytes:
     month_num = get_month_number(month_str)
     ps, pe    = calc_period(courses, year, month_num)
-    pm_a, prod_a, pwd, twd = calc_labor(ps, pe, year, month_num)
     write_dt  = get_last_business_day(year, month_num)
     revenue   = calc_revenue(courses, price_tbl)
     studio_a  = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
     proj_name = build_project_name(courses)
+    period_d  = (pe - ps).days
 
-    # 세부내역 구성
+    # 참여율 (손익분석서와 동일한 비율 사용)
+    pm_pct   = round(pm_rate   * 100, 1)
+    prod_pct = round(prod_rate * 100, 1)
+    period_str = f"{fmt_short(ps)} ~ {fmt_short(pe)}"
+
+    # 세부내역
     new_s  = sum(c.session_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[0])
     prt_c  = sum(c.chapter_count or 0 for c in courses
-                 if classify_fmt(c.shooting_format or "")[1] and not classify_fmt(c.shooting_format or "")[2])
+                 if classify_fmt(c.shooting_format or "")[1]
+                 and not classify_fmt(c.shooting_format or "")[2])
     eprt_c = sum(c.chapter_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[2])
-    travel_h = sum((c.travel_hours or 0) for c in courses
-                   if c.shooting_format and "출장" in c.shooting_format)
+    travel_h = sum((c.travel_hours or (1 if c.shooting_format and "출장" in c.shooting_format else 0))
+                   for c in courses if c.shooting_format and "출장" in c.shooting_format)
 
-    detail_lines = ["1. 사업내용", "   (1) 한공회 콘텐츠 개발"]
-    if new_s:
-        detail_lines.append(f"   - 신규: {new_s}차시(단가: ₩500,000, VAT별도) / 유상개발")
-    if prt_c:
-        detail_lines.append(f"   - 포팅(무편집): {prt_c}챕터(단가: ₩50,000, VAT별도) / 유상개발")
-    if eprt_c:
-        detail_lines.append(f"   - 포팅(편집): {eprt_c}챕터(단가: ₩160,000, VAT별도) / 유상개발")
-    if travel_h:
-        detail_lines.append(f"   - 출장비: {travel_h}시간(단가: ₩100,000, VAT별도)")
-    detail_lines.append(f"   (2) 개발기간 : {fmt_kr(ps)} ~ {fmt_kr(pe)}")
-    detail_text = "\n".join(detail_lines)
+    detail_lines = []
+    if new_s:   detail_lines.append(f"   - 신규: {new_s}차시(단가: ₩500,000, VAT별도) / 유상개발")
+    if prt_c:   detail_lines.append(f"   - 포팅(무편집): {prt_c}챕터(단가: ₩50,000, VAT별도) / 유상개발")
+    if eprt_c:  detail_lines.append(f"   - 포팅(편집): {eprt_c}챕터(단가: ₩160,000, VAT별도) / 유상개발")
+    if travel_h: detail_lines.append(f"   - 출장비: {travel_h}시간(단가: ₩100,000, VAT별도)")
+    detail_text = (
+        f"1. 사업내용\n   (1) 한공회 콘텐츠 개발\n"
+        + "\n".join(detail_lines)
+        + f"\n   (2) 개발기간 : {fmt_kr(ps)} ~ {fmt_kr(pe)}"
+    )
 
     contact_name  = customer_contact.contact_name if customer_contact else ""
     contact_phone = customer_contact.phone        if customer_contact else ""
     contact_email = customer_contact.email        if customer_contact else ""
 
     doc = DocxDocument()
-    for section in doc.sections:
-        section.top_margin    = Cm(2.0)
-        section.bottom_margin = Cm(2.0)
-        section.left_margin   = Cm(2.5)
-        section.right_margin  = Cm(2.5)
+    for sec in doc.sections:
+        sec.top_margin = sec.bottom_margin = Cm(2.0)
+        sec.left_margin = sec.right_margin = Cm(2.5)
 
-    # ── 제목 ──
-    h = doc.add_paragraph()
-    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = h.add_run("프로젝트 프로파일")
-    r.bold = True
-    r.font.size = Pt(14)
-    r.underline = True
-
+    # ── 제목 ──────────────────────────────────────────────────────────
+    title_p = doc.add_paragraph()
+    title_p.alignment = CTR
+    r = title_p.add_run("프로젝트 프로파일")
+    r.bold = True; r.font.size = Pt(14); r.underline = True
     doc.add_paragraph()
 
-    # 문서번호/사업명/작성자/작성일 표
-    meta_tbl = doc.add_table(rows=2, cols=4)
-    meta_tbl.style = "Table Grid"
+    # 문서번호/사업명/작성자/작성일
+    m = doc.add_table(rows=2, cols=4)
+    m.style = "Table Grid"
     for ci, (l, v) in enumerate([("문서번호", ""), ("사업명", "한공회 콘텐츠 개발")]):
-        _set_cell(meta_tbl.rows[0].cells[ci*2],   l, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-        _set_cell(meta_tbl.rows[0].cells[ci*2+1], v, size=9)
+        _cell(m.rows[0].cells[ci*2],   l, bold=True, align=CTR, bg=HDR_BG)
+        _cell(m.rows[0].cells[ci*2+1], v)
     for ci, (l, v) in enumerate([("작성자(SR)", PM_NAME), ("작성일", fmt_kr(write_dt))]):
-        _set_cell(meta_tbl.rows[1].cells[ci*2],   l, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-        _set_cell(meta_tbl.rows[1].cells[ci*2+1], v, size=9)
-
+        _cell(m.rows[1].cells[ci*2],   l, bold=True, align=CTR, bg=HDR_BG)
+        _cell(m.rows[1].cells[ci*2+1], v)
     doc.add_paragraph()
 
-    # ── 1. 개요 ──
-    h1 = doc.add_paragraph()
-    h1.add_run("1. 개요").bold = True
+    # ── 1. 개요 ───────────────────────────────────────────────────────
+    doc.add_paragraph().add_run("1. 개요").bold = True
+    note = doc.add_paragraph()
+    note.alignment = RGT
+    note.add_run("(단위 : 원, VAT별도)").font.size = Pt(8)
 
-    note_p = doc.add_paragraph()
-    note_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    note_p.add_run("(단위 : 원, VAT별도)").font.size = Pt(8)
-
-    # 개요 표 (프로젝트, 기간, 금액, 세부내역, 고객정보)
     ov = doc.add_table(rows=8, cols=4)
     ov.style = "Table Grid"
-    ov.autofit = False
 
-    # 프로젝트명
-    ov.rows[0].cells[0].merge(ov.rows[0].cells[1])
-    ov.rows[0].cells[2].merge(ov.rows[0].cells[3])
-    _set_cell(ov.rows[0].cells[0], "프로젝트명", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    _set_cell(ov.rows[0].cells[2], proj_name, size=9)
+    def ov_merge(row_idx, label, value_text):
+        ov.rows[row_idx].cells[0].merge(ov.rows[row_idx].cells[1])
+        ov.rows[row_idx].cells[2].merge(ov.rows[row_idx].cells[3])
+        _cell(ov.rows[row_idx].cells[0], label, bold=True, align=CTR, bg=HDR_BG)
+        _cell(ov.rows[row_idx].cells[2], value_text)
 
-    # 기간
-    ov.rows[1].cells[0].merge(ov.rows[1].cells[1])
-    ov.rows[1].cells[2].merge(ov.rows[1].cells[3])
-    _set_cell(ov.rows[1].cells[0], "기간", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    _set_cell(ov.rows[1].cells[2], f"{fmt_kr(ps)} ~ {fmt_kr(pe)}", size=9)
+    ov_merge(0, "프로젝트명", proj_name)
+    ov_merge(1, "기간",       f"{fmt_kr(ps)} ~ {fmt_kr(pe)}")
+    ov_merge(2, "계약금액",   f"₩{revenue:,}")
 
-    # 계약금액
-    ov.rows[2].cells[0].merge(ov.rows[2].cells[1])
-    ov.rows[2].cells[2].merge(ov.rows[2].cells[3])
-    _set_cell(ov.rows[2].cells[0], "계약금액", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    _set_cell(ov.rows[2].cells[2], f"₩{revenue:,}", size=9)
-
-    # 금액 구분
-    _set_cell(ov.rows[3].cells[0], "금액", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    _set_cell(ov.rows[3].cells[1], "선급금", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2", size=9)
-    _set_cell(ov.rows[3].cells[2], "중도금", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2", size=9)
-    _set_cell(ov.rows[3].cells[3], "잔금",   bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="F2F2F2", size=9)
-
-    _set_cell(ov.rows[4].cells[0], "", size=9)
-    _set_cell(ov.rows[4].cells[1], "계약체결시", size=9,
-              align=WD_ALIGN_PARAGRAPH.CENTER)
-    _set_cell(ov.rows[4].cells[2], "중간보고시", size=9,
-              align=WD_ALIGN_PARAGRAPH.CENTER)
-    _set_cell(ov.rows[4].cells[3], "납품완료시", size=9,
-              align=WD_ALIGN_PARAGRAPH.CENTER)
-
-    _set_cell(ov.rows[5].cells[0], "", size=9)
-    _set_cell(ov.rows[5].cells[1], "", size=9)
-    _set_cell(ov.rows[5].cells[2], "", size=9)
-    _set_cell(ov.rows[5].cells[3], f"₩{revenue:,}", size=9,
-              align=WD_ALIGN_PARAGRAPH.RIGHT)
+    # 금액 행
+    _cell(ov.rows[3].cells[0], "금액", bold=True, align=CTR, bg=HDR_BG)
+    for ci, h in enumerate(["선급금","중도금","잔금"], 1):
+        _cell(ov.rows[3].cells[ci], h, bold=True, align=CTR, bg=SUB_BG)
+    _cell(ov.rows[4].cells[0], "", bg=HDR_BG)
+    for ci, h in enumerate(["계약체결시","중간보고시","납품완료시"], 1):
+        _cell(ov.rows[4].cells[ci], h, align=CTR)
+    _cell(ov.rows[5].cells[0], "", bg=HDR_BG)
+    _cell(ov.rows[5].cells[1], "")
+    _cell(ov.rows[5].cells[2], "")
+    _cell(ov.rows[5].cells[3], f"₩{revenue:,}", align=RGT)
 
     # 세부내역
-    _set_cell(ov.rows[6].cells[0], "세부내역", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
+    _cell(ov.rows[6].cells[0], "세부내역", bold=True, align=CTR, bg=HDR_BG)
     ov.rows[6].cells[1].merge(ov.rows[6].cells[3])
-    _set_cell(ov.rows[6].cells[1], detail_text, size=9)
+    _cell(ov.rows[6].cells[1], detail_text)
 
     # 고객정보
     ov.rows[7].cells[0].merge(ov.rows[7].cells[3])
-    _set_cell(ov.rows[7].cells[0], "고객정보", bold=True,
-              align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
+    _cell(ov.rows[7].cells[0], "고객정보", bold=True, align=CTR, bg=HDR_BG)
 
-    # 고객 상세 (별도 표)
     cust = doc.add_table(rows=2, cols=6)
     cust.style = "Table Grid"
-    for ci, h_ in enumerate(["고객명", "담당자", "설명", "연락처", "핸드폰", "E-Mail"]):
-        _set_cell(cust.rows[0].cells[ci], h_, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    _set_cell(cust.rows[1].cells[0], "한국공인회계사회", size=9)
-    _set_cell(cust.rows[1].cells[1], contact_name, size=9)
-    _set_cell(cust.rows[1].cells[2], dept, size=9)
-    _set_cell(cust.rows[1].cells[3], contact_phone, size=9)
-    _set_cell(cust.rows[1].cells[4], "", size=9)
-    _set_cell(cust.rows[1].cells[5], contact_email, size=9)
-
+    for ci, h in enumerate(["고객명","담당자","설명","연락처(☎)","핸드폰","E-Mail"]):
+        _cell(cust.rows[0].cells[ci], h, bold=True, align=CTR, bg=HDR_BG)
+    _cell(cust.rows[1].cells[0], "한국공인회계사회")
+    _cell(cust.rows[1].cells[1], contact_name)
+    _cell(cust.rows[1].cells[2], dept)
+    _cell(cust.rows[1].cells[3], contact_phone)
+    _cell(cust.rows[1].cells[4], "")
+    _cell(cust.rows[1].cells[5], contact_email)
     doc.add_paragraph()
 
-    # ── 2. 참여인력 ──
-    h2 = doc.add_paragraph()
-    h2.add_run("2. 참여인력(계획)").bold = True
-
-    pm_rate_pct  = round(PM_RATE   * 100 * pwd / max(twd, 1))
-    prod_rate_pct = round(PROD_RATE * 100 * pwd / max(twd, 1))
-    period_str = f"{str(ps.year)[2:]}.{ps.month:02d}.{ps.day:02d} ~ {str(pe.year)[2:]}.{pe.month:02d}.{pe.day:02d}"
-
-    staff_tbl = doc.add_table(rows=4, cols=5)
-    staff_tbl.style = "Table Grid"
-    for ci, h_ in enumerate(["역할","성명","소속","참여기간","참여율(%)"]):
-        _set_cell(staff_tbl.rows[0].cells[ci], h_, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-    for ri, (role, name, rate) in enumerate([
-        ("PM", PM_NAME, f"{pm_rate_pct}%"),
-        ("영상촬영 및 편집,\n포팅", PROD_NAME, f"{prod_rate_pct}%"),
-        ("", "", ""),
-    ], 1):
-        _set_cell(staff_tbl.rows[ri].cells[0], role, size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell(staff_tbl.rows[ri].cells[1], name, size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell(staff_tbl.rows[ri].cells[2], "서비스 운영팀", size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell(staff_tbl.rows[ri].cells[3], period_str if name else "", size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell(staff_tbl.rows[ri].cells[4], rate, size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-
+    # ── 2. 참여인력 ───────────────────────────────────────────────────
+    doc.add_paragraph().add_run("2. 참여인력(계획)").bold = True
+    staff = doc.add_table(rows=4, cols=5)
+    staff.style = "Table Grid"
+    for ci, h in enumerate(["역할","성명","소속","참여기간","참여율(%)"]):
+        _cell(staff.rows[0].cells[ci], h, bold=True, align=CTR, bg=HDR_BG)
+    people = [
+        ("PM",                       PM_NAME,   f"{pm_pct}%"),
+        ("영상촬영 및 편집,\n포팅",    PROD_NAME, f"{prod_pct}%"),
+        ("",                          "",        ""),
+    ]
+    for ri, (role, name, pct) in enumerate(people, 1):
+        _cell(staff.rows[ri].cells[0], role,            align=CTR)
+        _cell(staff.rows[ri].cells[1], name,            align=CTR)
+        _cell(staff.rows[ri].cells[2], "서비스 운영팀" if name else "", align=CTR)
+        _cell(staff.rows[ri].cells[3], period_str if name else "", align=CTR)
+        _cell(staff.rows[ri].cells[4], pct,             align=CTR)
     doc.add_paragraph()
 
-    # ── 3. 외부협력 ──
-    h3 = doc.add_paragraph()
-    h3.add_run("3. 외부협력(계획)").bold = True
-    note3 = doc.add_paragraph()
-    note3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    # ── 3. 외부협력 ───────────────────────────────────────────────────
+    doc.add_paragraph().add_run("3. 외부협력(계획)").bold = True
+    note3 = doc.add_paragraph(); note3.alignment = RGT
     note3.add_run("(단위 : 원, VAT별도)").font.size = Pt(8)
-
-    ext_tbl = doc.add_table(rows=5, cols=6)
-    ext_tbl.style = "Table Grid"
-    for ci, h_ in enumerate(["부문","업체","담당자","사무실","핸드폰","E-Mail"]):
-        _set_cell(ext_tbl.rows[0].cells[ci], h_, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
+    ext = doc.add_table(rows=5, cols=6)
+    ext.style = "Table Grid"
+    for ci, h in enumerate(["부문","업체","담당자","사무실","핸드폰","E-Mail"]):
+        _cell(ext.rows[0].cells[ci], h, bold=True, align=CTR, bg=HDR_BG)
     for ri in range(1, 5):
-        for ci in range(6):
-            _set_cell(ext_tbl.rows[ri].cells[ci], "", size=9)
-
+        for ci in range(6): _cell(ext.rows[ri].cells[ci], "")
     doc.add_paragraph()
 
-    # ── 4. 장비 및 시설 ──
-    h4 = doc.add_paragraph()
-    h4.add_run("4. 장비 및 시설").bold = True
-    note4 = doc.add_paragraph()
-    note4.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    # ── 4. 장비 및 시설 ───────────────────────────────────────────────
+    doc.add_paragraph().add_run("4. 장비 및 시설").bold = True
+    note4 = doc.add_paragraph(); note4.alignment = RGT
     note4.add_run("(단위 : 원, VAT별도)").font.size = Pt(8)
-
-    eq_tbl = doc.add_table(rows=7, cols=5)
-    eq_tbl.style = "Table Grid"
-    for ci, h_ in enumerate(["내용","수량(시간)","단가","금액","비고"]):
-        _set_cell(eq_tbl.rows[0].cells[ci], h_, bold=True,
-                  align=WD_ALIGN_PARAGRAPH.CENTER, bg_color="D9E1F2", size=9)
-
+    eq = doc.add_table(rows=7, cols=5)
+    eq.style = "Table Grid"
+    for ci, h in enumerate(["내용","수량(시간)","단가","금액","비고"]):
+        _cell(eq.rows[0].cells[ci], h, bold=True, align=CTR, bg=HDR_BG)
     if include_studio and studio_hours > 0:
-        _set_cell(eq_tbl.rows[1].cells[0], "스튜디오 대관", size=9)
-        _set_cell(eq_tbl.rows[1].cells[1], str(studio_hours), size=9,
-                  align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell(eq_tbl.rows[1].cells[2], f"{STUDIO_UNIT_PRICE:,}", size=9,
-                  align=WD_ALIGN_PARAGRAPH.RIGHT)
-        _set_cell(eq_tbl.rows[1].cells[3], f"{studio_a:,}", size=9,
-                  align=WD_ALIGN_PARAGRAPH.RIGHT)
-        _set_cell(eq_tbl.rows[1].cells[4], "", size=9)
-        start_row = 2
+        _cell(eq.rows[1].cells[0], "스튜디오 대관")
+        _cell(eq.rows[1].cells[1], str(studio_hours), align=CTR)
+        _cell(eq.rows[1].cells[2], f"{STUDIO_UNIT_PRICE:,}", align=RGT)
+        _cell(eq.rows[1].cells[3], f"{studio_a:,}", align=RGT)
+        _cell(eq.rows[1].cells[4], "")
+        start = 2
     else:
-        start_row = 1
-
-    for ri in range(start_row, 7):
-        for ci in range(5):
-            _set_cell(eq_tbl.rows[ri].cells[ci], "", size=9)
+        start = 1
+    for ri in range(start, 7):
+        for ci in range(5): _cell(eq.rows[ri].cells[ci], "")
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -818,21 +549,27 @@ def generate_all(courses, dept: str, month_str: str, year: int,
     month_num = get_month_number(month_str)
     ps, pe    = calc_period(courses, year, month_num)
     write_dt  = get_last_business_day(year, month_num)
-    m2        = f"{month_num:02d}"
-    dept_short = dept.replace(" ", "")
+    revenue   = calc_revenue(courses, price_tbl)
+    studio_a  = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
 
-    pnl_xlsx    = gen_pnl_excel(courses, dept, month_str, year,
-                                price_tbl, studio_hours, include_studio)
-    req_xlsx    = gen_devreq_excel(courses, dept, month_str, year, price_tbl)
-    req_docx    = gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt)
-    profile_docx = gen_profile_docx(courses, dept, month_str, year,
-                                    price_tbl, studio_hours, include_studio,
-                                    customer_contact)
+    # 손익률 40% 보장하는 참여율 계산 (두 문서 공통)
+    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe)
+
+    m2         = f"{month_num:02d}"
+    dept_short = dept.replace(" ", "").replace("•", "")
+
+    pnl      = gen_pnl_excel(courses, dept, month_str, year, price_tbl,
+                              studio_hours, include_studio, pm_rate, prod_rate)
+    req_xlsx = gen_devreq_excel(courses, dept, month_str, year, price_tbl)
+    req_docx = gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt)
+    profile  = gen_profile_docx(courses, dept, month_str, year, price_tbl,
+                                 studio_hours, include_studio,
+                                 pm_rate, prod_rate, customer_contact)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"손익분석서_{dept_short}_{year}{m2}.xlsx", pnl_xlsx)
-        zf.writestr(f"프로젝트프로파일_{dept_short}_{year}{m2}.docx", profile_docx)
-        zf.writestr(f"개발요청서_{dept_short}_{year}{m2}.docx", req_docx)
+        zf.writestr(f"손익분석서_{dept_short}_{year}{m2}.xlsx",  pnl)
+        zf.writestr(f"프로젝트프로파일_{dept_short}_{year}{m2}.docx", profile)
+        zf.writestr(f"개발요청서_{dept_short}_{year}{m2}.docx",  req_docx)
         zf.writestr(f"개발요청서첨부_{dept_short}_{year}{m2}.xlsx", req_xlsx)
     return buf.getvalue()
