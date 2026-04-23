@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}오류{% endblock %}
+{% block page_title %}{{ title or '오류 발생' }}{% endblock %}
+
+{% block content %}
+<div class="alert alert-danger">
+  <strong>{{ message }}</strong>
+</div>
+<div class="form-section">
+  <div class="form-section-title">상세 오류 내용</div>
+  <pre style="font-size:.78rem; background:#f8f9fc; padding:16px; border-radius:8px; overflow-x:auto; white-space:pre-wrap;">{{ detail }}</pre>
+</div>
+<a href="/documents" class="btn btn-outline-secondary mt-2"><i class="bi-arrow-left me-1"></i>돌아가기</a>
+{% endblock %}

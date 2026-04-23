@@ -743,9 +743,14 @@ def documents_generate(request: Request, year: int = Form(2026),
             include_studio=include_studio, customer_contact=customer)
 
     except Exception as e:
-        err_msg = traceback.format_exc()[-300:]
-        return RedirectResponse(
-            f"/documents?year={year}&dept={dept}&month={month}&err={err_msg[:120]}", 302)
+        err_detail = traceback.format_exc()
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "user": get_user(request),
+            "title": "문서 생성 오류",
+            "message": str(e),
+            "detail": err_detail,
+        }, status_code=500)
 
     month_num  = docgen.get_month_number(month)
     dept_short = dept.replace(" ", "")
