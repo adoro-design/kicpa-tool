@@ -10,10 +10,10 @@
     <div class="row g-2 align-items-end">
       <div class="col-md-2">
         <label class="form-label">부서명 <span class="text-danger">*</span></label>
-        <select name="department" class="form-select" required>
-          <option value="">선택</option>
-          {% for d in depts %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-        </select>
+        <input type="text" name="department" class="form-control" list="dept-list" placeholder="부서명 입력 또는 선택" required>
+        <datalist id="dept-list">
+          {% for d in depts %}<option value="{{ d }}">{% endfor %}
+        </datalist>
       </div>
       <div class="col-md-2">
         <label class="form-label">담당자명</label>
@@ -91,9 +91,7 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">부서명</label>
-            <select name="department" id="edit_dept" class="form-select">
-              {% for d in depts %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-            </select>
+            <input type="text" name="department" id="edit_dept" class="form-control" list="dept-list">
           </div>
           <div class="mb-3">
             <label class="form-label">담당자명</label>
