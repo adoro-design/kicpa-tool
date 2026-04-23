@@ -23,7 +23,8 @@
         <label class="form-label">촬영월</label>
         <select name="shooting_month" class="form-select">
           <option value="">선택</option>
-          {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.shooting_month==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          {% set sm = normalize_month(row.shooting_month) if row and row.shooting_month else '' %}
+          {% for m in MONTHS %}<option value="{{ m }}" {% if sm == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-10">
@@ -74,12 +75,16 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">촬영형식</label>
+        {% set sf = row.shooting_format or '' %}
         <select name="shooting_format" class="form-select">
           <option value="">선택</option>
-          <option value="신규개발" {% if row and row.shooting_format=='신규개발' %}selected{% endif %}>신규개발</option>
-          <option value="포팅(무편집)" {% if row and row.shooting_format=='포팅(무편집)' %}selected{% endif %}>포팅(무편집)</option>
-          <option value="포팅(편집)" {% if row and row.shooting_format=='포팅(편집)' %}selected{% endif %}>포팅(편집)</option>
-          <option value="출장" {% if row and row.shooting_format=='출장' %}selected{% endif %}>출장</option>
+          <option value="크로마키"   {% if '크로마키'  in sf %}selected{% endif %}>크로마키</option>
+          <option value="태블릿형"   {% if '태블릿형'  in sf %}selected{% endif %}>태블릿형</option>
+          <option value="전자칠판형" {% if '전자칠판형' in sf %}selected{% endif %}>전자칠판형</option>
+          <option value="신규개발"   {% if '신규개발'  in sf %}selected{% endif %}>신규개발</option>
+          <option value="포팅(무편집)" {% if '포팅' in sf and '무편집' in sf %}selected{% endif %}>포팅(무편집)</option>
+          <option value="포팅(편집)"   {% if '포팅' in sf and '편집' in sf and '무편집' not in sf %}selected{% endif %}>포팅(편집)</option>
+          <option value="출장" {% if '출장' in sf %}selected{% endif %}>출장</option>
         </select>
       </div>
       <div class="col-md-3">
@@ -123,7 +128,8 @@
         <label class="form-label">청구월</label>
         <select name="billing_month" class="form-select">
           <option value="">선택</option>
-          {% for m in MONTHS %}<option value="{{ m }}" {% if row and row.billing_month and row.billing_month.strip()==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          {% set bm = normalize_month(row.billing_month) if row and row.billing_month else '' %}
+          {% for m in MONTHS %}<option value="{{ m }}" {% if bm == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-3">

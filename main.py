@@ -39,9 +39,24 @@ def clean_name(name):
         if cleaned: return cleaned
     return re.sub(r'\[.*?\]', '', str(name).replace('\n', ' ')).strip()
 
+def normalize_month(val):
+    """다양한 월 표기를 'X월' 형식으로 통일
+    예: '4' → '4월', '04' → '4월', '4월 ' → '4월', '4월청구' → '4월'
+    """
+    if not val: return None
+    s = str(val).strip()
+    m = re.search(r'\b(\d{1,2})월?\b', s)
+    if m:
+        num = int(m.group(1))
+        if 1 <= num <= 12:
+            return f"{num}월"
+    return s
+
 templates.env.filters["fmt_date"] = fmt_date
 templates.env.filters["clean_name"] = clean_name
+templates.env.filters["normalize_month"] = normalize_month
 templates.env.globals["MONTHS"] = MONTHS
+templates.env.globals["normalize_month"] = normalize_month
 
 @app.on_event("startup")
 def startup(): init_db()
@@ -175,7 +190,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         materials_supply=materials_supply or None, video_marking=video_marking or None,
         dev_outsource_date=to_date(dev_outsource_date), inspection_date=to_date(inspection_date),
         open_date=to_date(open_date), billing=billing or None,
-        billing_month=billing_month or None,
+        billing_month=normalize_month(billing_month),
         custom_price=to_int(custom_price),
         travel_hours=to_int(travel_hours),
         travel_expense=to_int(travel_expense), notes=notes or None)
@@ -351,7 +366,7 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
                 dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
                 open_date=to_date(row[23]), billing=str(row[24] or "") or None,
-                billing_month=str(row[25] or "").strip() or None,
+                billing_month=normalize_month(str(row[25] or "")),
                 # 수동 입력값: Excel에 없는 항목이므로 기존 값 우선 복원
                 custom_price=manual.get("custom_price"),
                 travel_hours=manual.get("travel_hours"),
