@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row g-3 mb-4">
   <!-- 월별 소계 카드 -->
-  {% for m, stat in monthly.items() | sort(attribute='0', key=lambda x: MONTHS.index(x) if x in MONTHS else 99) %}
+  {% for m in MONTHS if m in monthly %}{% set stat = monthly[m] %}
   <div class="col-md-3">
     <div class="stat-card">
       <div class="stat-icon" style="background:#e8f0fe; color:#2f5496;"><i class="bi-camera-video"></i></div>
