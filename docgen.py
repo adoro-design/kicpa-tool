@@ -316,19 +316,24 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     doc = DocxDocument(os.path.join(TEMPLATE_DIR, 'tpl_profile.docx'))
     t0,t1,t2,t3,t4 = doc.tables[0],doc.tables[1],doc.tables[2],doc.tables[3],doc.tables[4]
 
-    _set_cell_text(t0.rows[1].cells[3], fmt_kr(write_dt))
-    _replace_doc(doc, "한공회 콘텐츠 개발(신규14차시)", pname)
-    _replace_doc(doc, "2026. 03. 04 ~ 2026. 03. 27", f"{fmt_kr(ps)} ~ {fmt_kr(pe)}")
-    _replace_doc(doc, "7,000,000", f"{revenue:,}")
+    # ── 새 템플릿 플레이스홀더 치환 ──
+    # 표0: 작성일
+    _replace_doc(doc, "작성일 표시",   fmt_kr(write_dt))
+    # 표1: 프로젝트명·기간·계약금액
+    _replace_doc(doc, "한공회 콘텐츠 개발(신규00차시, 포팅00챕터)", pname)
+    _replace_doc(doc, "프로젝트 기간",          f"{fmt_kr(ps)} ~ {fmt_kr(pe)}")
+    _replace_doc(doc, "계약금액 : 금액표시",    f"계약금액 : \u20a9{revenue:,}")
+    _replace_doc(doc, "계약금액 표시",          f"\u20a9{revenue:,}")
+    # 표1: 세부내역·담당자
     _clear_cell_and_set(t1.rows[8].cells[1], new_detail)
     _set_cell_text(t1.rows[12].cells[1], cn)
     _set_cell_text(t1.rows[12].cells[2], cp)
     _set_cell_text(t1.rows[12].cells[5], ce)
-    # 참여인력 표 - 직접 셀 설정 (전체치환 오염 방지)
+    # 표2: 참여인력 (참여기간·참여율 직접 설정)
+    _set_cell_text(t2.rows[2].cells[3], period_str)  # PM 참여기간
+    _set_cell_text(t2.rows[3].cells[3], period_str)  # PROD 참여기간
     _set_cell_text(t2.rows[2].cells[4], f"{pm_pct}%")   # PM 참여율
     _set_cell_text(t2.rows[3].cells[4], f"{prod_pct}%") # PROD 참여율
-    _set_cell_text(t2.rows[2].cells[3], period_str)            # PM 참여기간
-    _set_cell_text(t2.rows[3].cells[3], period_str)            # PROD 참여기간
 
     if include_studio and studio_hours > 0:
         _set_cell_text(t4.rows[2].cells[1], str(studio_hours))
