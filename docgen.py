@@ -263,14 +263,20 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                     10:c.shooting_format or "", 11:"", 12:up,
                     13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
         else:
-            th    = c.travel_hours or 1
-            td    = getattr(c, 'travel_days', None)
+            th      = c.travel_hours or 1
+            td      = getattr(c, 'travel_days', None)
+            loc     = getattr(c, 'location', None) or ""
             day_str = f"({td}일)" if td else ""
-            tname = f"{c.course_name} 출장 : {th}시간{day_str}"
-            vals  = {1:"", 2:"출장비",
-                     3:tname, 4:"", 5:"",
-                     6:th, 7:"", 8:"", 9:"", 10:"", 11:"",
-                     12:PRICE_TRAVEL_HR, 13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
+            loc_str = f" [{loc}]" if loc else ""
+            tname   = f"{c.course_name} 출장 : {th}시간{day_str}{loc_str}"
+            t_amt   = get_travel_for(c, tr_rate)  # 실제 출장비 금액
+            vals    = {1:"", 2:"출장비",
+                       3:tname, 4:"", 5:"",
+                       6:"",   # 시간 공란 → 전체 합계 제외
+                       7:"", 8:"", 9:"", 10:"", 11:"",
+                       12:PRICE_TRAVEL_HR,
+                       13:t_amt,              # 금액 직접값
+                       14:round(t_amt*1.1)}   # 총액(VAT포함)
 
         for col, val in vals.items():
             try:
