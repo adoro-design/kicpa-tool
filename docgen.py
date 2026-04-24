@@ -182,10 +182,11 @@ def gen_pnl_excel(courses, dept, month_str, year, price_tbl,
     ws['I8'] = calc_revenue(courses, price_tbl)
     ws['D10'] = ps; ws['D10'].number_format = 'YYYY-MM-DD'
     ws['E10'] = pe; ws['E10'].number_format = 'YYYY-MM-DD'
-    ws['F10'] = pm_rate; ws['F10'].number_format = '0%'
+    # 비율 정수 반올림 (6.82% → 7%) - 셀값·수식입력줄 모두 정수
+    ws['F10'] = round(pm_rate * 100) / 100; ws['F10'].number_format = '0%'
     ws['D11'] = ps; ws['D11'].number_format = 'YYYY-MM-DD'
     ws['E11'] = pe; ws['E11'].number_format = 'YYYY-MM-DD'
-    ws['F11'] = prod_rate; ws['F11'].number_format = '0%' 
+    ws['F11'] = round(prod_rate * 100) / 100; ws['F11'].number_format = '0%' 
     ws['D17'] = STUDIO_UNIT_PRICE if include_studio else 0
     ws['E17'] = studio_hours       if include_studio else 0
     ws['E32'] = MONTHLY_SALARY
@@ -275,6 +276,35 @@ def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
     _replace_doc(doc, "2026년 03월 04일", fmt_kr2(ps))    # 개발기간 시작
     _replace_doc(doc, "2026년 03월 27일", fmt_kr2(pe))    # 개발기간 종료
     _replace_doc(doc, "2026년 03월 16일", fmt_kr2(write_dt))  # 서명일
+
+    # ── row7 중첩표(번호/품목/수량/단위)에 과정 목록 채우기 ──
+    cell7    = doc.tables[0].rows[7].cells[0]
+    ntbl_xml = cell7._tc.findall('.//' + qn('w:tbl'))
+    if ntbl_xml and courses:
+        from docx.table import Table as _DTable
+        from lxml import etree
+        ntbl      = _DTable(ntbl_xml[0], doc)
+        data_rows = ntbl.rows[1:-1]      # 헤더(0)·합계(마지막) 제외
+        tpl_tr    = data_rows[0]._tr     # 행 서식 복사용
+
+        # 빈 행 수가 부족하면 추가
+        while len(data_rows) < len(courses):
+            new_tr = etree.fromstring(etree.tostring(tpl_tr))
+            ntbl._tbl.insert(ntbl._tbl.index(ntbl.rows[-1]._tr), new_tr)
+            data_rows = ntbl.rows[1:-1]
+
+        # 기존 데이터 행 초기화 후 입력
+        for ri, dr in enumerate(data_rows):
+            for cell in dr.cells:
+                for p in cell.paragraphs:
+                    for r in p.runs: r.text = ""
+            if ri < len(courses):
+                c = courses[ri]
+                is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
+                unit  = "챕터" if (is_p or is_ep) else "차시"
+                count = (c.chapter_count if (is_p or is_ep) else c.session_count) or 0
+                for ci, val in enumerate([str(ri+1), c.course_name or "", str(count), unit]):
+                    _set_cell_text(dr.cells[ci], val)
 
     buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
