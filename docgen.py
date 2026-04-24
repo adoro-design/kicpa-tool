@@ -19,11 +19,21 @@ MONTHLY_SALARY    = 8_850_000
 PM_RATE           = 0.01
 PROD_RATE         = 0.15
 STUDIO_UNIT_PRICE = 45_000
-TARGET_PROFIT     = 0.40
+TARGET_PROFIT     = 0.30
 PRICE_NEW       = 500_000
 PRICE_PORTING   = 50_000
 PRICE_EDIT_PORT = 160_000
 PRICE_TRAVEL_HR = 100_000
+
+# 유형별 1차시당 표준 작업시간 (촬영·편집 담당, 시간 단위)
+WORK_HOURS_PER_SESSION = {
+    'default':      2.5,   # 크로마키·태블릿형·전자칠판형·신규개발
+    'porting':      0.5,   # 포팅(무편집)
+    'edit_porting': 1.0,   # 포팅(편집)
+    'travel':       0.0,   # 출장 (촬영 당일 인건비 없음)
+}
+WORK_HOURS_PER_DAY = 8.0
+
 PM_NAME        = "이상현"
 PROD_NAME      = "염왕도"
 DEPT_CODE      = "SS"
@@ -50,6 +60,15 @@ def get_month_number(month_str):
 def fmt_kr(d):    return f"{d.year}. {d.month:02d}. {d.day:02d}"
 def fmt_kr2(d):   return f"{d.year}년 {d.month:02d}월 {d.day:02d}일"
 def fmt_short(d): return f"{str(d.year)[2:]}.{d.month:02d}.{d.day:02d}"
+
+def get_weekday_count(start, end):
+    """start~end 사이 평일(월~금) 수"""
+    count, d = 0, start
+    while d <= end:
+        if d.weekday() < 5:
+            count += 1
+        d += timedelta(days=1)
+    return count
 
 def get_sijengil(ps):
     d = ps - timedelta(days=2)
@@ -101,20 +120,49 @@ def calc_labor_amounts(ps, pe, pm_rate, prod_rate):
     return (round(d/30*pm_rate*MONTHLY_SALARY+1),
             round(d/30*prod_rate*MONTHLY_SALARY+1))
 
-def adjust_rates(revenue, studio_a, ps, pe):
-    pm_a, prod_a = calc_labor_amounts(ps, pe, PM_RATE, PROD_RATE)
+def calc_prod_rate_from_standards(courses, ps, pe):
+    """콘텐츠 유형별 표준시간 기반 PROD 투입비율 계산"""
+    total_work = 0.0
+    for c in courses:
+        fmt = c.shooting_format or ""
+        sessions = c.session_count or 0
+        if "포팅" in fmt:
+            hours = WORK_HOURS_PER_SESSION['edit_porting'] if ("편집" in fmt and "무편집" not in fmt) else WORK_HOURS_PER_SESSION['porting']
+        elif "출장" in fmt:
+            hours = WORK_HOURS_PER_SESSION['travel']
+        else:
+            hours = WORK_HOURS_PER_SESSION['default']
+        total_work += sessions * hours
+
+    available = get_weekday_count(ps, pe) * WORK_HOURS_PER_DAY
+    if available <= 0:
+        return PROD_RATE
+    return total_work / available
+
+
+def adjust_rates(revenue, studio_a, ps, pe, courses=None):
+    """PM=1% 고정, PROD=표준시간 기반 계산, 손익률 30% 이상 보장. 비율 정수% 반올림."""
+    pm_fixed = 0.01  # PM 1% 고정
+
+    # PROD: 표준시간 기반 계산 → 정수% 반올림
+    raw_prod  = calc_prod_rate_from_standards(courses, ps, pe) if courses else PROD_RATE
+    prod_rate = round(raw_prod * 100) / 100   # e.g. 0.3125 → 0.31 (31%)
+
+    # 손익률 30% 확인
+    pm_a, prod_a = calc_labor_amounts(ps, pe, pm_fixed, prod_rate)
     if revenue > 0 and (revenue - pm_a - prod_a - studio_a) / revenue >= TARGET_PROFIT:
-        return PM_RATE, PROD_RATE
+        return pm_fixed, prod_rate  # 30% 이상 → 그대로 사용
+
+    # PROD 축소하여 30% 보장
     period_d  = (pe - ps).days
     max_labor = (1 - TARGET_PROFIT) * revenue - studio_a - 2
-    fixed_pm  = max(PM_RATE, 0.01)
-    pm_fixed  = round(period_d/30*fixed_pm*MONTHLY_SALARY+1)
-    max_prod  = max_labor - pm_fixed
-    base_prod = period_d/30*PROD_RATE*MONTHLY_SALARY
-    if max_prod <= 0: return fixed_pm, 0.0
-    if base_prod <= 0 or max_prod >= base_prod: return fixed_pm, PROD_RATE
-    np = round(max_prod/(period_d/30*MONTHLY_SALARY), 4) if period_d > 0 else 0
-    return fixed_pm, max(np, 0.0)
+    pm_amt    = round(period_d / 30 * pm_fixed * MONTHLY_SALARY + 1)
+    max_prod  = max_labor - pm_amt
+    if max_prod <= 0 or period_d <= 0:
+        return pm_fixed, 0.0
+    new_prod  = round(max_prod / (period_d / 30 * MONTHLY_SALARY) * 100) / 100
+    return pm_fixed, max(new_prod, 0.0)
+
 
 def build_project_name(courses):
     ns  = sum(c.session_count or 0 for c in courses if classify_fmt(c.shooting_format or "")[0])
@@ -428,7 +476,7 @@ def generate_all(courses, dept, month_str, year, price_tbl,
     write_dt = get_last_business_day(year, mn)
     revenue  = calc_revenue(courses, price_tbl)
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
-    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe)
+    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe, courses=courses)
 
     mm_str = f"{mn:02d}월"
     mmdd   = write_dt.strftime('%m%d')   # 작성일 MMDD (예: 0430)
