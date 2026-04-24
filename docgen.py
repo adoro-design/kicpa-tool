@@ -478,7 +478,7 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     # 표0: 작성일
     _replace_doc(doc, "작성일 표시",   fmt_kr(write_dt))
     # 표1: 프로젝트명·기간·계약금액
-    _replace_doc(doc, "한공회 콘텐츠 개발(신규00차시, 포팅00챕터)", pname)
+    _replace_doc(doc, "한공회 콘텐츠 개발(신규00차시, 포팅00차시)", pname)
     _replace_doc(doc, "프로젝트 기간",          f"{fmt_kr(ps)} ~ {fmt_kr(pe)}")
     _replace_doc(doc, "계약금액 : 금액표시",    f"계약금액 : \u20a9{revenue:,}")
     _replace_doc(doc, "계약금액 표시",          f"\u20a9{revenue:,}")
