@@ -16,7 +16,7 @@ import calendar as _calendar
 
 load_dotenv()
 
-app = FastAPI(title="KICPA 콘텐츠 관리")
+app = FastAPI(title="KICPA 콘텐츠 정산 관리")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "kicpa-dev-secret"))
 
 @app.exception_handler(Exception)
@@ -1053,11 +1053,4 @@ def documents_generate(request: Request, year: int = Form(2026),
 
     from urllib.parse import quote
     month_num  = docgen.get_month_number(month)
-    dept_short = dept.replace(" ", "")
-    filename   = f"{year}{month_num:02d}_한공회_{dept_short}_정산문서.zip"
-    encoded    = quote(filename, safe="")
-    return StreamingResponse(
-        io.BytesIO(zip_bytes),
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
-    )
+ 
