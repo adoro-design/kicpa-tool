@@ -30,7 +30,7 @@ WORK_HOURS_PER_SESSION = {
     'default':      2.5,   # 크로마키·태블릿형·전자칠판형·신규개발
     'porting':      0.5,   # 포팅(무편집)
     'edit_porting': 1.0,   # 포팅(편집)
-    'travel':       0.0,   # 출장 (촬영 당일 인건비 없음)
+    'travel':       2.5,   # 출장 (크로마키와 동일, 실제 현장 개발)
 }
 WORK_HOURS_PER_DAY = 8.0
 
@@ -476,7 +476,11 @@ def generate_all(courses, dept, month_str, year, price_tbl,
     write_dt = get_last_business_day(year, mn)
     revenue  = calc_revenue(courses, price_tbl)
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
-    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe, courses=courses)
+    # 출장비는 실비 정산 항목 → 순수 개발 매출 기준으로 투입비율 계산
+    tr_rate_  = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
+    travel_a_ = sum(get_travel_for(c, tr_rate_) for c in courses)
+    dev_rev   = revenue - travel_a_   # 순수 개발 매출 (출장비 제외)
+    pm_rate, prod_rate = adjust_rates(dev_rev, studio_a, ps, pe, courses=courses)
 
     mm_str = f"{mn:02d}월"
     mmdd   = write_dt.strftime('%m%d')   # 작성일 MMDD (예: 0430)
