@@ -16,17 +16,25 @@
       <h6>KICPA</h6><strong>콘텐츠 관리</strong>
     </div>
     <ul class="nav flex-column mt-2">
-      <li class="nav-section">메뉴</li>
+      <!-- 홈 -->
       <li class="nav-item"><a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/"><i class="bi-speedometer2"></i> 대시보드</a></li>
+
+      <!-- 콘텐츠 관리 -->
+      <li class="nav-section">콘텐츠 관리</li>
       <li class="nav-item"><a class="nav-link {% if '/contents' in request.url.path %}active{% endif %}" href="/contents"><i class="bi-table"></i> 콘텐츠 목록</a></li>
-      <li class="nav-item"><a class="nav-link {% if '/schedule' in request.url.path %}active{% endif %}" href="/schedule"><i class="bi-camera-video"></i> 촬영 일정</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/schedule' in request.url.path %}active{% endif %}" href="/schedule"><i class="bi-calendar3"></i> 촬영 일정</a></li>
       <li class="nav-item"><a class="nav-link {% if '/import' in request.url.path %}active{% endif %}" href="/import"><i class="bi-upload"></i> Excel 가져오기</a></li>
       <li class="nav-item"><a class="nav-link" href="/export"><i class="bi-download"></i> Excel 내보내기</a></li>
+
       {% if user and user.role == 'admin' %}
-      <li class="nav-section">관리</li>
-      <li class="nav-item"><a class="nav-link {% if '/documents' in request.url.path %}active{% endif %}" href="/documents"><i class="bi-file-earmark-word"></i> 문서 생성</a></li>
+      <!-- 정산/문서 -->
+      <li class="nav-section">정산 · 문서</li>
       <li class="nav-item"><a class="nav-link {% if '/billing' in request.url.path %}active{% endif %}" href="/billing"><i class="bi-cash-stack"></i> 정산 관리</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/documents' in request.url.path %}active{% endif %}" href="/documents"><i class="bi-file-earmark-zip"></i> 문서 생성</a></li>
       <li class="nav-item"><a class="nav-link {% if '/studio' in request.url.path %}active{% endif %}" href="/studio"><i class="bi-camera-video"></i> 스튜디오 대관</a></li>
+
+      <!-- 설정 -->
+      <li class="nav-section">설정</li>
       <li class="nav-item"><a class="nav-link {% if '/customers' in request.url.path %}active{% endif %}" href="/customers"><i class="bi-person-lines-fill"></i> 고객담당자</a></li>
       <li class="nav-item"><a class="nav-link {% if '/price_table' in request.url.path %}active{% endif %}" href="/price_table"><i class="bi-tag"></i> 단가표 관리</a></li>
       <li class="nav-item"><a class="nav-link {% if '/calc_settings' in request.url.path %}active{% endif %}" href="/calc_settings"><i class="bi-sliders"></i> 손익분석서 설정</a></li>
