@@ -141,31 +141,85 @@ def logout(request: Request):
 # ── 대시보드 ─────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db)):
+    from collections import Counter
     require_login(request)
+    today = date.today()
     base = db.query(Content).filter_by(year=year)
-    total   = base.count()
-    shot    = base.filter(Content.shooting_date != None).count()
-    opened  = base.filter(Content.open_date != None).count()
-    billed  = base.filter(Content.billing != None, Content.billing != "").count()
+    total  = base.count()
+    shot   = base.filter(Content.shooting_date != None).count()
+    opened = base.filter(Content.open_date != None).count()
+    billed = base.filter(Content.billing_month != None, Content.billing_month != "").count()
 
+    # ── 부서별 현황 ──────────────────────────────────
     depts_raw = db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().all()
     dept_list = [d[0] for d in depts_raw]
     dept_summary = []
     for dept in dept_list:
         q = db.query(Content).filter_by(year=year, department=dept)
+        total_d = q.count()
+        billed_d = q.filter(Content.billing_month != None, Content.billing_month != "").count()
         dept_summary.append({
             "department": dept,
-            "total": q.count(),
+            "total": total_d,
             "shot": q.filter(Content.shooting_date != None).count(),
             "opened": q.filter(Content.open_date != None).count(),
+            "billed": billed_d,
+            "billed_pct": round(billed_d / total_d * 100) if total_d > 0 else 0,
         })
     dept_summary.sort(key=lambda x: x["total"], reverse=True)
 
+    # ── 월별·부서별 매출 계산 ─────────────────────────
+    monthly_revenue = {}   # {월: 금액}
+    dept_revenue    = {}   # {부서: 금액}
+    # 청구월이 있는 (부서, 월) 조합만 계산
+    combos = db.query(Content.department, Content.billing_month).filter_by(year=year)\
+               .filter(Content.billing_month != None, Content.billing_month != "").distinct().all()
+    _price_cache = {}
+    for dept, m in combos:
+        if m not in MONTH_ORDER:
+            continue
+        m_num = MONTH_ORDER[m] + 1
+        if m_num not in _price_cache:
+            _price_cache[m_num] = get_price_table_for_month(db, year, m_num)
+        price_tbl = _price_cache[m_num]
+        courses = db.query(Content).filter_by(year=year, department=dept, billing_month=m).all()
+        rev = docgen.calc_revenue(courses, price_tbl)
+        monthly_revenue[m] = monthly_revenue.get(m, 0) + rev
+        dept_revenue[dept] = dept_revenue.get(dept, 0) + rev
+
+    # ── 촬영형식 분포 ────────────────────────────────
+    fmt_rows = db.query(Content.shooting_format).filter_by(year=year)\
+                 .filter(Content.shooting_format != None).all()
+    format_counts = dict(Counter(r[0] for r in fmt_rows if r[0]))
+
+    # ── 이번달 촬영 예정 ──────────────────────────────
+    this_month_courses = db.query(Content).filter_by(year=year).filter(
+        func.extract("month", Content.shooting_date) == today.month,
+        func.extract("year",  Content.shooting_date) == today.year
+    ).order_by(Content.shooting_date).all()
+
+    # ── 미오픈 현황 (촬영완료, 오픈 미완료) ───────────
+    not_opened_raw = db.query(Content).filter_by(year=year).filter(
+        Content.shooting_date != None,
+        Content.open_date == None
+    ).order_by(Content.shooting_date).all()
+    not_opened = [(c, (today - c.shooting_date).days) for c in not_opened_raw]
+    not_opened.sort(key=lambda x: x[1], reverse=True)
+
     recent = db.query(Content).filter_by(year=year).order_by(Content.id.desc()).limit(8).all()
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "user": get_user(request),
         "year": year, "total": total, "shot": shot, "opened": opened, "billed": billed,
-        "dept_summary": dept_summary, "recent": recent,
+        "dept_summary": dept_summary,
+        "monthly_revenue": {m: monthly_revenue.get(m, 0) for m in MONTHS},
+        "dept_revenue": dept_revenue,
+        "format_counts": format_counts,
+        "this_month_courses": this_month_courses,
+        "not_opened": not_opened,
+        "recent": recent,
+        "today": today,
+        "MONTHS": MONTHS,
     })
 
 # ── 콘텐츠 목록 ───────────────────────────────────
