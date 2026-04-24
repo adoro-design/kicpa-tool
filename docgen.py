@@ -198,6 +198,19 @@ def _replace_doc(doc, old, new):
             for cell in row.cells:
                 for p in cell.paragraphs: _replace_para(p, old, new)
 
+def _apply_font(doc, font_name):
+    """문서 전체 런에 폰트명 강제 적용"""
+    from docx.shared import Pt
+    for para in doc.paragraphs:
+        for run in para.runs:
+            run.font.name = font_name
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.name = font_name
+
 def _set_cell_text(cell, txt):
     for para in cell.paragraphs:
         if para.runs:
@@ -417,6 +430,9 @@ def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
         # 합계 행 수량 채우기 (마지막 행 col 2)
         total_row = ntbl.rows[-1]
         _set_cell_text(total_row.cells[2], str(total_qty))
+
+    # 전체 폰트 '돋움'으로 통일
+    _apply_font(doc, "돋움")
 
     buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
