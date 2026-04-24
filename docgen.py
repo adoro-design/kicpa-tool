@@ -199,17 +199,26 @@ def _replace_doc(doc, old, new):
                 for p in cell.paragraphs: _replace_para(p, old, new)
 
 def _apply_font(doc, font_name):
-    """문서 전체 런에 폰트명 강제 적용"""
-    from docx.shared import Pt
+    """문서 전체 런에 폰트명 강제 적용 (중첩 표 포함)"""
+    def _set_cell_font(cell):
+        for para in cell.paragraphs:
+            for run in para.runs:
+                run.font.name = font_name
+        # 중첩 표 재귀 처리
+        from docx.oxml.ns import qn as _qn
+        for tbl_elem in cell._tc.findall('.//' + _qn('w:tbl')):
+            from docx.table import Table as _T
+            for row in _T(tbl_elem, doc).rows:
+                for c in row.cells:
+                    _set_cell_font(c)
+
     for para in doc.paragraphs:
         for run in para.runs:
             run.font.name = font_name
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.font.name = font_name
+                _set_cell_font(cell)
 
 def _set_cell_text(cell, txt):
     for para in cell.paragraphs:
@@ -499,6 +508,9 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
         _set_cell_text(t4.rows[2].cells[3], f"{studio_hours*STUDIO_UNIT_PRICE:,}")
     else:
         for ci in range(5): _set_cell_text(t4.rows[2].cells[ci], "")
+
+    # 전체 폰트 '나눔고딕'으로 통일
+    _apply_font(doc, "나눔고딕")
 
     buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
