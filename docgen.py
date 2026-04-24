@@ -287,6 +287,16 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
     if total_n > tdc:   ws.insert_rows(ttr, total_n - tdc)
     elif total_n < tdc: ws.delete_rows(tds + total_n, tdc - total_n)
 
+    # 데이터 행 스타일 샘플링 (삽입/삭제 전 첫 번째 데이터 행에서 추출)
+    row_styles = {}
+    for col in range(1, 15):
+        src = ws.cell(tds, col)
+        row_styles[col] = {
+            'font':      copy(src.font)      if src.font else None,
+            'border':    copy(src.border)    if src.border else None,
+            'alignment': copy(src.alignment) if src.alignment else None,
+        }
+
     # 합계 행 설정 (루프 전에 병합 처리 → 루프 중 기존 병합 충돌 방지)
     tr = tds + total_n; er = tr - 1
     # 기존 A?:E? 병합 해제 후 새로 설정
@@ -334,8 +344,11 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
         for col, val in vals.items():
             try:
                 cell = ws.cell(r, col, val)
-                hdrc = ws.cell(tds - 1, col)
-                if hdrc.border: cell.border = copy(hdrc.border)
+                # 샘플링된 데이터 행 스타일 적용 (폰트·정렬·테두리 통일)
+                s = row_styles.get(col, {})
+                if s.get('font'):      cell.font      = copy(s['font'])
+                if s.get('border'):    cell.border    = copy(s['border'])
+                if s.get('alignment'): cell.alignment = copy(s['alignment'])
                 if col == 8 and isinstance(val, date): cell.number_format = 'YYYY-MM-DD'
                 if col in (12, 13, 14): cell.number_format = '#,##0'
             except AttributeError:
