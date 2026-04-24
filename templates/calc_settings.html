@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}계산 설정 관리{% endblock %}
+{% block page_title %}계산 설정 관리{% endblock %}
+
+{% block content %}
+<!-- 현재 유효 설정 요약 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">현재 유효 설정 (오늘 기준)</div>
+  <div class="row g-2">
+    {% for key, label in LABELS.items() %}
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body py-2 px-3">
+          <div style="font-size:.75rem; color:#888;">{{ label }}</div>
+          <div style="font-size:1.1rem; font-weight:700; color:#1a2340;">
+            {{ current[key] }}
+            {% if '시간' in label %}시간{% elif '%' in label %}%{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 새 설정 추가 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">새 설정값 추가 (변경 적용일 입력)</div>
+  <form method="post" action="/calc_settings/add">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">설정 항목 <span class="text-danger">*</span></label>
+        <select name="setting_name" class="form-select" required>
+          <option value="">선택</option>
+          {% for key, label in LABELS.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">새 값 <span class="text-danger">*</span></label>
+        <input type="number" name="setting_value" class="form-control" step="0.1" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">적용 시작일</label>
+        <input type="date" name="effective_from" class="form-control">
+        <div style="font-size:.71rem; color:#888; margin-top:2px;">비워두면 항상 유효</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">비고</label>
+        <input type="text" name="notes" class="form-control" placeholder="변경 사유 등">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi-plus-lg me-1"></i>추가</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- 이력 목록 -->
+<div class="table-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>설정 이력</span>
+    <span class="text-muted" style="font-size:.8rem;">총 {{ all_rows|length }}건</span>
+  </div>
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>설정 항목</th>
+        <th class="text-center">값</th>
+        <th>적용 시작일</th>
+        <th>비고</th>
+        <th>등록일</th>
+        <th style="width:60px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in all_rows %}
+      <tr>
+        <td style="font-size:.84rem;">{{ LABELS.get(r.setting_name, r.setting_name) }}</td>
+        <td class="text-center" style="font-weight:600;">{{ r.setting_value }}</td>
+        <td style="font-size:.84rem;">
+          {% if r.effective_from %}
+            <span class="badge-billing-month">{{ r.effective_from | fmt_date }}</span>
+          {% else %}
+            <span class="badge-notyet">항상</span>
+          {% endif %}
+        </td>
+        <td style="font-size:.83rem;">{{ r.label or '-' }}</td>
+        <td style="font-size:.8rem;">{{ r.created_at.strftime('%Y.%m.%d') if r.created_at else '-' }}</td>
+        <td>
+          <form method="post" action="/calc_settings/delete/{{ r.id }}"
+            onsubmit="return confirm('삭제하시겠습니까?')">
+            <button type="submit" class="btn btn-xs btn-outline-danger"
+              style="font-size:.74rem; padding:2px 8px;">삭제</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center py-4 text-muted">설정 이력이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

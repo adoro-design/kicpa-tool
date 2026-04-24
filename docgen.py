@@ -475,12 +475,22 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
 
 # 전체 ZIP 생성
 def generate_all(courses, dept, month_str, year, price_tbl,
-                 studio_hours, include_studio, customer_contact=None):
+                 studio_hours, include_studio, customer_contact=None,
+                 calc_settings=None):
     mn       = get_month_number(month_str)
     ps, pe   = calc_period(courses, year, mn)
     write_dt = get_last_business_day(year, mn)
     revenue  = calc_revenue(courses, price_tbl)
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
+    # calc_settings 적용 (청구월 기준 유효 설정)
+    if calc_settings:
+        WORK_HOURS_PER_SESSION['default']      = calc_settings.get('work_hours_chromakey', 2.5)
+        WORK_HOURS_PER_SESSION['porting']      = calc_settings.get('work_hours_porting', 0.5)
+        WORK_HOURS_PER_SESSION['edit_porting'] = calc_settings.get('work_hours_edit_porting', 1.0)
+        WORK_HOURS_PER_SESSION['travel']       = calc_settings.get('work_hours_travel', 3.5)
+        global TARGET_PROFIT
+        TARGET_PROFIT = calc_settings.get('target_profit_pct', 30.0) / 100
+
     # 출장비 포함 전체 매출 기준으로 투입비율 계산 (출장비 1차시당 1시간 반영)
     pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe, courses=courses)
 

@@ -10,8 +10,9 @@ from datetime import date
 import os, io, re
 from dotenv import load_dotenv
 
-from database import get_db, init_db, User, Content, PriceTable, Document, StudioRental, CustomerContact
+from database import get_db, init_db, User, Content, PriceTable, Document, StudioRental, CustomerContact, CalcSettings
 import docgen
+import calendar as _calendar
 
 load_dotenv()
 
@@ -43,6 +44,45 @@ def require_admin(request: Request):
     if not u or u["role"] != "admin": raise HTTPException(status_code=403, detail="권한 없음")
 
 def fmt_date(d): return d.strftime("%Y.%m.%d") if d else ""
+
+def get_price_table_for_month(db, year: int, month: int) -> dict:
+    """해당 청구월 마지막 날 기준 유효 단가표 반환 (effective_from <= billing_date 중 최신)"""
+    from sqlalchemy import or_
+    billing_date = date(year, month, _calendar.monthrange(year, month)[1])
+    rows = db.query(PriceTable).filter(
+        PriceTable.is_active == True,
+        or_(PriceTable.effective_from == None, PriceTable.effective_from <= billing_date)
+    ).order_by(PriceTable.type_name, PriceTable.effective_from.desc().nullslast()).all()
+    result, seen = {}, set()
+    for p in rows:
+        if p.type_name not in seen:
+            result[p.type_name] = p.unit_price
+            seen.add(p.type_name)
+    return result
+
+def get_calc_settings_for_month(db, year: int, month: int) -> dict:
+    """해당 청구월 기준 유효 계산 설정 반환"""
+    from sqlalchemy import or_
+    billing_date = date(year, month, _calendar.monthrange(year, month)[1])
+    defaults = {
+        'work_hours_chromakey':   2.5,
+        'work_hours_porting':     0.5,
+        'work_hours_edit_porting':1.0,
+        'work_hours_travel':      3.5,
+        'target_profit_pct':     30.0,
+        'travel_cap_hours':       4.0,
+        'work_hours_per_day':     8.0,
+    }
+    rows = db.query(CalcSettings).filter(
+        CalcSettings.is_active == True,
+        or_(CalcSettings.effective_from == None, CalcSettings.effective_from <= billing_date)
+    ).order_by(CalcSettings.setting_name, CalcSettings.effective_from.desc().nullslast()).all()
+    result, seen = dict(defaults), set()
+    for s in rows:
+        if s.setting_name not in seen:
+            result[s.setting_name] = s.setting_value
+            seen.add(s.setting_name)
+    return result
 def clean_name(name):
     if not name: return ''
     for line in str(name).split('\n'):
@@ -439,7 +479,9 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     )
     contents = q.order_by(billing_month_sort.desc(), date_sort, Content.id.desc()).all()
 
-    price_tbl = {p.type_name: p.unit_price for p in db.query(PriceTable).filter_by(is_active=True).all()}
+    # 정산 페이지: 전체 월 혼재 시 당월 기준 사용 (필터된 월 또는 현재 연도 마지막 월)
+    _mn = docgen.get_month_number(month) if month else 12
+    price_tbl = get_price_table_for_month(db, year, _mn)
 
     def match_price(fmt):
         """촬영형식 문자열로 단가표 단가 조회"""
@@ -537,15 +579,65 @@ async def price_table_update(request: Request, db: Session = Depends(get_db)):
 async def price_table_add(request: Request,
     category: str = Form(""), type_name: str = Form(""),
     unit_price: str = Form(""), unit: str = Form(""), note: str = Form(""),
+    effective_from: str = Form(""),
     db: Session = Depends(get_db)):
     require_admin(request)
     if category and type_name:
+        eff = date.fromisoformat(effective_from) if effective_from else None
         db.add(PriceTable(
             category=category, type_name=type_name,
             unit_price=int(unit_price) if unit_price else None,
-            unit=unit or None, note=note or None, is_active=True))
+            unit=unit or None, note=note or None, is_active=True,
+            effective_from=eff))
         db.commit()
     return RedirectResponse("/price_table?msg=added", 302)
+
+# ── 계산 설정 관리 (관리자) ──────────────────────────
+@app.get("/calc_settings", response_class=HTMLResponse)
+def calc_settings_page(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
+    # 설정별 이력 목록
+    all_rows = db.query(CalcSettings).order_by(
+        CalcSettings.setting_name, CalcSettings.effective_from.desc().nullslast()
+    ).all()
+    # 현재 유효값 (날짜 없이 최신)
+    current = get_calc_settings_for_month(db, date.today().year, date.today().month)
+    LABELS = {
+        'work_hours_chromakey':    '크로마키·태블릿·전자칠판형 (차시당 시간)',
+        'work_hours_porting':      '포팅(무편집) (차시당 시간)',
+        'work_hours_edit_porting': '포팅(편집) (차시당 시간)',
+        'work_hours_travel':       '출장 (차시당 시간)',
+        'target_profit_pct':       '최소 손익률 (%)',
+        'travel_cap_hours':        '출장비 일일 한도 (시간)',
+        'work_hours_per_day':      '1일 근무시간',
+    }
+    return templates.TemplateResponse("calc_settings.html", {
+        "request": request, "user": get_user(request),
+        "all_rows": all_rows, "current": current, "LABELS": LABELS,
+    })
+
+@app.post("/calc_settings/add")
+def calc_settings_add(request: Request,
+    setting_name: str = Form(""), setting_value: str = Form(""),
+    effective_from: str = Form(""), notes: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    if setting_name and setting_value:
+        eff = date.fromisoformat(effective_from) if effective_from else None
+        db.add(CalcSettings(
+            setting_name=setting_name,
+            setting_value=float(setting_value),
+            effective_from=eff,
+            label=notes or None))
+        db.commit()
+    return RedirectResponse("/calc_settings", 302)
+
+@app.post("/calc_settings/delete/{sid}")
+def calc_settings_delete(request: Request, sid: int, db: Session = Depends(get_db)):
+    require_admin(request)
+    db.query(CalcSettings).filter_by(id=sid).delete()
+    db.commit()
+    return RedirectResponse("/calc_settings", 302)
 
 @app.post("/price_table/delete/{pid}")
 def price_table_delete(request: Request, pid: int, db: Session = Depends(get_db)):
@@ -590,6 +682,185 @@ def users_change_pw(request: Request, user_id: int=Form(...), new_password: str=
         db.commit()
     return RedirectResponse("/users", 302)
 
+# ── 고객담당자 관리 ───────────────────────────────
+@app.get("/customers", response_class=HTMLResponse)
+def customers_page(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
+    contacts = db.query(CustomerContact).order_by(CustomerContact.department).all()
+    depts = [d[0] for d in db.query(Content.department).filter(Content.department != None).distinct().order_by(Content.department).all()]
+    return templates.TemplateResponse("customers.html", {
+        "request": request, "user": get_user(request),
+        "contacts": contacts, "depts": depts, "msg": "",
+    })
+
+@app.post("/customers/add")
+def customers_add(request: Request,
+    department: str = Form(""), contact_name: str = Form(""),
+    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    if department:
+        db.add(CustomerContact(department=department, contact_name=contact_name or None,
+            phone=phone or None, email=email or None, note=note or None))
+        db.commit()
+    return RedirectResponse("/customers", 302)
+
+@app.post("/customers/edit/{cid}")
+def customers_edit(request: Request, cid: int,
+    department: str = Form(""), contact_name: str = Form(""),
+    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    c = db.query(CustomerContact).filter_by(id=cid).first()
+    if c:
+        c.department = department or c.department
+        c.contact_name = contact_name or None
+        c.phone = phone or None
+        c.email = email or None
+        c.note = note or None
+        db.commit()
+    return RedirectResponse("/customers", 302)
+
+@app.post("/customers/delete/{cid}")
+def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
+    require_admin(request)
+    db.query(CustomerContact).filter_by(id=cid).delete()
+    db.commit()
+    return RedirectResponse("/customers", 302)
+
+# ── 스튜디오 대관료 관리 ──────────────────────────
+@app.get("/studio", response_class=HTMLResponse)
+def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
+    require_admin(request)
+    q = db.query(StudioRental).filter_by(year=year)
+    if month: q = q.filter_by(month=month)
+    rentals = q.order_by(StudioRental.usage_date).all()
+    months = [m[0] for m in db.query(StudioRental.month).filter_by(year=year)
+              .filter(StudioRental.month != None).distinct().all()]
+    months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
+    # 월별 소계
+    monthly = {}
+    for r in db.query(StudioRental).filter_by(year=year).all():
+        key = r.month or "-"
+        monthly.setdefault(key, {"hours": 0, "amount": 0})
+        monthly[key]["hours"]  += r.hours or 0
+        monthly[key]["amount"] += (r.hours or 0) * (r.unit_price or 45000)
+    return templates.TemplateResponse("studio.html", {
+        "request": request, "user": get_user(request),
+        "year": year, "month": month, "rentals": rentals,
+        "months": months, "MONTHS": MONTHS, "monthly": monthly,
+    })
+
+@app.post("/studio/add")
+def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
+    usage_date: str = Form(""), hours: str = Form(""),
+    unit_price: str = Form("45000"), notes: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    try:
+        ud = date.fromisoformat(usage_date) if usage_date else None
+        m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
+        if ud and hours:
+            db.add(StudioRental(year=year, month=m, usage_date=ud,
+                hours=int(hours), unit_price=int(unit_price) if unit_price else 45000,
+                notes=notes or None))
+            db.commit()
+    except Exception: pass
+    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
+
+@app.post("/studio/delete/{rid}")
+def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    r = db.query(StudioRental).filter_by(id=rid).first()
+    m = r.month if r else month
+    db.query(StudioRental).filter_by(id=rid).delete()
+    db.commit()
+    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
+
+# ── 문서 생성 (관리자) ────────────────────────────
+@app.get("/documents", response_class=HTMLResponse)
+def documents_page(request: Request, year: int = 2026, dept: str = "", month: str = "",
+                   db: Session = Depends(get_db)):
+    require_admin(request)
+    depts = [d[0] for d in db.query(Content.department).filter_by(year=year)
+             .filter(Content.department != None).distinct().order_by(Content.department).all()]
+    billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year)
+                      .filter(Content.billing_month != None).distinct().all()]
+    billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
+    preview = []
+    if dept and month:
+        preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month).all()
+    return templates.TemplateResponse("documents.html", {
+        "request": request, "user": get_user(request),
+        "year": year, "depts": depts, "dept": dept,
+        "billing_months": billing_months, "month": month,
+        "preview": preview, "MONTHS": MONTHS,
+    })
+
+@app.post("/documents/generate")
+def documents_generate(request: Request, year: int = Form(2026),
+                       dept: str = Form(""), month: str = Form(""),
+                       db: Session = Depends(get_db)):
+    import traceback
+    require_admin(request)
+    if not dept or not month:
+        return RedirectResponse(f"/documents?year={year}", 302)
+
+    try:
+        courses = db.query(Content).filter_by(year=year, department=dept,
+                                              billing_month=month).all()
+        if not courses:
+            return RedirectResponse(
+                f"/documents?year={year}&dept={dept}&month={month}&msg=no_data", 302)
+
+        # 청구월 기준 유효 단가표 + 계산 설정
+        mn_num    = docgen.get_month_number(month)
+        price_tbl = get_price_table_for_month(db, year, mn_num)
+        calc_cfg  = get_calc_settings_for_month(db, year, mn_num)
+
+        studio_rentals = db.query(StudioRental).filter_by(year=year, month=month).all()
+        studio_hours   = sum(r.hours or 0 for r in studio_rentals)
+
+        tr = price_tbl.get("1 ~ 4시간", 100000)
+        def dept_revenue(d):
+            rows = db.query(Content).filter_by(year=year, billing_month=month, department=d).all()
+            return sum(
+                docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
+                + docgen.get_travel_for(c, tr)
+                for c in rows
+            )
+        all_depts = [d[0] for d in db.query(Content.department)
+                     .filter_by(year=year, billing_month=month)
+                     .filter(Content.department != None).distinct().all()]
+        max_dept       = max(all_depts, key=dept_revenue) if all_depts else dept
+        include_studio = (dept == max_dept)
+
+        customer = db.query(CustomerContact).filter_by(department=dept, is_active=True).first()
+
+        zip_bytes = docgen.generate_all(
+            courses=courses, dept=dept, month_str=month, year=year,
+            price_tbl=price_tbl, studio_hours=studio_hours,
+            include_studio=include_studio, customer_contact=customer,
+            calc_settings=calc_cfg)
+
+    except Exception as e:
+        err_detail = traceback.format_exc()
+        return templates.TemplateResponse("error.html", {
+            "request": request, "user": get_user(request),
+            "title": "문서 생성 오류", "message": str(e), "detail": err_detail,
+        }, status_code=500)
+
+    from urllib.parse import quote
+    month_num  = docgen.get_month_number(month)
+    dept_short = dept.replace(" ", "")
+    filename   = f"{year}{month_num:02d}_한공회_{dept_short}_정산문서.zip"
+    encoded    = quote(filename, safe="")
+    return StreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
+    )
 # ── 고객담당자 관리 ───────────────────────────────
 @app.get("/customers", response_class=HTMLResponse)
 def customers_page(request: Request, db: Session = Depends(get_db)):
