@@ -381,7 +381,8 @@ def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
 
         # 빈 행 수가 부족하면 추가
         while len(data_rows) < len(courses):
-            new_tr = etree.fromstring(etree.tostring(tpl_tr))
+            from copy import deepcopy as _dc
+            new_tr = _dc(tpl_tr)   # deepcopy: CT_Row 클래스 유지 (etree.fromstring 사용 시 tc_lst 오류 발생)
             ntbl._tbl.insert(ntbl._tbl.index(ntbl.rows[-1]._tr), new_tr)
             data_rows = ntbl.rows[1:-1]
 
