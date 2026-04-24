@@ -220,34 +220,65 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
         if mr.min_row >= tds:
             ws.unmerge_cells(str(mr))
 
-    n = len(courses)
-    if n > tdc:   ws.insert_rows(ttr, n - tdc)
-    elif n < tdc: ws.delete_rows(tds + n, tdc - n)
+    tr_rate = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
 
-    for idx, c in enumerate(courses):
-        r = tds + idx
-        is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
-        up = get_unit_price_for(c, price_tbl)
-        vals = {1:idx+1, 2:"포팅" if (is_p or is_ep) else "신규",
-                3:c.course_name, 4:c.instructor, 5:"",
-                6:c.session_count or "", 7:c.chapter_count or "",
-                8:c.open_date, 9:c.shooting_format or "",
-                10:c.shooting_format or "", 11:"", 12:up,
-                13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
-        for col, val in vals.items():
-            cell = ws.cell(r, col, val)
-            hdr = ws.cell(tds - 1, col)
-            if hdr.border: cell.border = copy(hdr.border)
-            if col == 8 and isinstance(val, date): cell.number_format = 'YYYY-MM-DD'
-            if col in (12, 13, 14): cell.number_format = '#,##0'
+    # 출장비 행 포함 총 행 수 계산
+    rows_data = []
+    for idx2, c2 in enumerate(courses):
+        rows_data.append((False, c2, 0))
+        ta = get_travel_for(c2, tr_rate)
+        if ta > 0:
+            rows_data.append((True, c2, ta))
 
-    tr = tds + n; er = tr - 1
+    total_n = len(rows_data)
+    if total_n > tdc:   ws.insert_rows(ttr, total_n - tdc)
+    elif total_n < tdc: ws.delete_rows(tds + total_n, tdc - total_n)
+
+    # 합계 행 설정 (루프 전에 병합 처리 → 루프 중 기존 병합 충돌 방지)
+    tr = tds + total_n; er = tr - 1
+    # 기존 A?:E? 병합 해제 후 새로 설정
+    for mr in list(ws.merged_cells.ranges):
+        if mr.min_row >= tds:
+            ws.unmerge_cells(str(mr))
     ws.cell(tr, 1, "전체 합계")
     ws.merge_cells(f"A{tr}:E{tr}")
     ws.cell(tr, 6,  f"=SUM(F{tds}:F{er})")
     ws.cell(tr, 7,  f"=SUM(G{tds}:G{er})")
     ws.cell(tr, 13, f"=SUM(M{tds}:M{er})").number_format = '#,##0'
     ws.cell(tr, 14, f"=SUM(N{tds}:N{er})").number_format = '#,##0'
+
+    course_seq = 0
+    for ri, (is_travel, c, ta) in enumerate(rows_data):
+        r = tds + ri
+        hdr = ws.cell(tds - 1, 1)
+        is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
+        up = get_unit_price_for(c, price_tbl)
+
+        if not is_travel:
+            course_seq += 1
+            vals = {1:course_seq, 2:"포팅" if (is_p or is_ep) else "신규",
+                    3:c.course_name, 4:c.instructor, 5:"",
+                    6:c.session_count or "", 7:c.chapter_count or "",
+                    8:c.open_date, 9:c.shooting_format or "",
+                    10:c.shooting_format or "", 11:"", 12:up,
+                    13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
+        else:
+            th    = c.travel_hours or 1
+            tname = f"{c.course_name} 출장 : {th}시간"
+            vals  = {1:"", 2:"출장비",
+                     3:tname, 4:"", 5:"",
+                     6:th, 7:"", 8:"", 9:"", 10:"", 11:"",
+                     12:PRICE_TRAVEL_HR, 13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
+
+        for col, val in vals.items():
+            try:
+                cell = ws.cell(r, col, val)
+                hdrc = ws.cell(tds - 1, col)
+                if hdrc.border: cell.border = copy(hdrc.border)
+                if col == 8 and isinstance(val, date): cell.number_format = 'YYYY-MM-DD'
+                if col in (12, 13, 14): cell.number_format = '#,##0'
+            except AttributeError:
+                pass  # MergedCell 무시
 
     # 품의 시트(구 Sheet3): col A=번호, col B-H = 구분~총액 공란
     CLEAR = {2,3,4,5,6,7,8}  # B~H
