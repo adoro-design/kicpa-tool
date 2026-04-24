@@ -294,6 +294,7 @@ def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
             data_rows = ntbl.rows[1:-1]
 
         # 기존 데이터 행 초기화 후 입력
+        total_qty = 0
         for ri, dr in enumerate(data_rows):
             for cell in dr.cells:
                 for p in cell.paragraphs:
@@ -303,8 +304,13 @@ def gen_devreq_docx(courses, dept, month_str, year, ps, pe, write_dt):
                 is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
                 unit  = "챕터" if (is_p or is_ep) else "차시"
                 count = (c.chapter_count if (is_p or is_ep) else c.session_count) or 0
+                total_qty += count
                 for ci, val in enumerate([str(ri+1), c.course_name or "", str(count), unit]):
                     _set_cell_text(dr.cells[ci], val)
+
+        # 합계 행 수량 채우기 (마지막 행 col 2)
+        total_row = ntbl.rows[-1]
+        _set_cell_text(total_row.cells[2], str(total_qty))
 
     buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
