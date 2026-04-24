@@ -122,15 +122,16 @@
   <!-- 비용 청구 여부 및 단가 -->
   <div class="form-section">
     <div class="form-section-title">비용 청구 여부 및 단가</div>
-    <div class="row g-3">
-      <div class="col-md-2">
+    <!-- 1행: 비용청구 / 청구월 / 별도단가 (넓게) -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
         <label class="form-label">비용 청구</label>
         <select name="billing" class="form-select">
           <option value="">미청구</option>
           <option value="Y" {% if row and row.billing %}selected{% endif %}>청구완료</option>
         </select>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-3">
         <label class="form-label">청구월</label>
         <select name="billing_month" class="form-select">
           <option value="">선택</option>
@@ -138,34 +139,35 @@
           {% for m in MONTHS %}<option value="{{ m }}" {% if bm == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-6">
         <label class="form-label">별도 단가 <small class="text-muted">(원/차시, VAT별도)</small></label>
         <input type="number" name="custom_price" class="form-control" step="1000"
                placeholder="단가표 적용 시 공란"
                value="{{ row.custom_price if row and row.custom_price is not none else '' }}">
       </div>
-      <div id="travel_wrap" style="display:{% if row and row.shooting_format and '출장' in row.shooting_format %}contents{% else %}none{% endif %}; flex-wrap:wrap; gap:12px;">
-        <div class="col-md-2">
-          <label class="form-label">출장 시간 <small class="text-muted">(시간)</small></label>
-          <input type="number" name="travel_hours" class="form-control" min="1" step="1"
-                 placeholder="예: 8 (이틀×4시간)"
-                 value="{{ row.travel_hours if row and row.travel_hours is not none else '' }}">
-          <div style="font-size:.72rem; color:#888; margin-top:3px;">시간 × 100,000원 자동 계산</div>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">출장 일수 <small class="text-muted">(일)</small></label>
-          <input type="number" name="travel_days" class="form-control" min="1" step="1"
-                 placeholder="예: 2"
-                 value="{{ row.travel_days if row and row.travel_days is not none else '' }}">
-          <div style="font-size:.72rem; color:#888; margin-top:3px;">문서 표시용</div>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">출장비 직접 입력 <small class="text-muted">(우선 적용)</small></label>
-          <input type="number" name="travel_expense" class="form-control" step="10000"
-                 placeholder="시간 계산 무시하고 직접 입력"
-                 value="{{ row.travel_expense if row and row.travel_expense is not none else '' }}">
-          <div style="font-size:.72rem; color:#888; margin-top:3px;">4시간 초과 협의금액 등</div>
-        </div>
+    </div>
+    <!-- 2행: 출장 관련 (출장형식 선택 시 표시) -->
+    <div id="travel_wrap" style="display:{% if row and row.shooting_format and '출장' in row.shooting_format %}flex{% else %}none{% endif %}; flex-wrap:wrap; gap:16px;">
+      <div class="col-md-3">
+        <label class="form-label">출장 시간 <small class="text-muted">(시간)</small></label>
+        <input type="number" name="travel_hours" class="form-control" min="1" step="1"
+               placeholder="예: 8 (이틀×4시간)"
+               value="{{ row.travel_hours if row and row.travel_hours is not none else '' }}">
+        <div style="font-size:.72rem; color:#888; margin-top:3px;">시간 × 100,000원 자동 계산</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">출장 일수 <small class="text-muted">(일)</small></label>
+        <input type="number" name="travel_days" class="form-control" min="1" step="1"
+               placeholder="예: 2"
+               value="{{ row.travel_days if row and row.travel_days is not none else '' }}">
+        <div style="font-size:.72rem; color:#888; margin-top:3px;">문서 표시용</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">출장비 직접 입력 <small class="text-muted">(우선 적용)</small></label>
+        <input type="number" name="travel_expense" class="form-control" step="10000"
+               placeholder="시간 계산 무시하고 직접 입력"
+               value="{{ row.travel_expense if row and row.travel_expense is not none else '' }}">
+        <div style="font-size:.72rem; color:#888; margin-top:3px;">4시간 초과 협의금액 등</div>
       </div>
     </div>
   </div>
