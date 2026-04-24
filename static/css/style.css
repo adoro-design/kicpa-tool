@@ -76,13 +76,17 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f2f5; color: #333
 
 /* ─── Tables ─── */
 .table-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); overflow:hidden; }
+.table-card .card-header { padding:14px 20px; }
 .table-card .table { margin:0; font-size:.83rem; }
 .table-card .table thead th {
   background:#f8f9fc; color:#555; font-weight:600; font-size:.78rem;
-  border-bottom:2px solid #e8ecf0; padding:10px 12px; white-space:nowrap;
+  border-bottom:2px solid #e8ecf0; padding:12px 16px; white-space:nowrap;
 }
-.table-card .table tbody td { padding:9px 12px; vertical-align:middle; border-color:#f0f0f0; }
+.table-card .table tbody td { padding:10px 16px; vertical-align:middle; border-color:#f0f0f0; }
 .table-card .table tbody tr:hover { background:#fafbfd; }
+/* 테이블 내 버튼 한줄 처리 */
+.table-card .table .btn { white-space:nowrap; }
+.btn-xs { white-space:nowrap !important; }
 
 /* ─── Badges ─── */
 .badge-month         { background:#e8f0fe; color:#1967d2; font-size:.72rem; padding:3px 7px; border-radius:5px; }
