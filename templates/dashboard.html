@@ -92,7 +92,26 @@
   </div>
 </div>
 
-<!-- ③ 부서별 매출 현황 + 미오픈 현황 -->
+<!-- ③ 부서별 월별 비교 -->
+{% if dept_monthly %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <span class="title">
+          <iconify-icon icon="mdi:chart-bar-stacked" width="16" style="color:#059669;"></iconify-icon>
+          부서별 월별 매출 비교
+        </span>
+      </div>
+      <div class="dash-card-body" style="position:relative; height:260px;">
+        <canvas id="deptMonthlyChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ④ 부서별 매출 현황 + 미오픈 현황 -->
 <div class="row g-3 mb-4">
   <div class="col-md-7">
     <div class="dash-card">
@@ -163,25 +182,6 @@
     </div>
   </div>
 </div>
-
-<!-- ④ 부서별 월별 비교 -->
-{% if dept_monthly %}
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="dash-card">
-      <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:chart-bar-stacked" width="16" style="color:#059669;"></iconify-icon>
-          부서별 월별 매출 비교
-        </span>
-      </div>
-      <div class="dash-card-body" style="position:relative; height:260px;">
-        <canvas id="deptMonthlyChart"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
 
 <!-- ⑤ 부서별 현황 테이블 + 이번달 촬영 예정 -->
 <div class="row g-3">
