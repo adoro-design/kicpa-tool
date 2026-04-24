@@ -199,14 +199,27 @@ def _replace_doc(doc, old, new):
                 for p in cell.paragraphs: _replace_para(p, old, new)
 
 def _apply_font(doc, font_name):
-    """문서 전체 런에 폰트명 강제 적용 (중첩 표 포함)"""
+    """문서 전체 런에 폰트명 강제 적용 (한글 East Asian 포함, 중첩 표 포함)"""
+    def _set_run_font(run):
+        """ASCII + East Asian(한글) 폰트 동시 설정"""
+        run.font.name = font_name
+        # 한글 등 East Asian 문자 폰트를 XML 레벨에서 직접 설정
+        rPr = run._r.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:ascii'),    font_name)
+        rFonts.set(qn('w:hAnsi'),    font_name)
+        rFonts.set(qn('w:eastAsia'), font_name)  # 한글 폰트 핵심
+        rFonts.set(qn('w:cs'),       font_name)
+
     def _set_cell_font(cell):
         for para in cell.paragraphs:
             for run in para.runs:
-                run.font.name = font_name
+                _set_run_font(run)
         # 중첩 표 재귀 처리
-        from docx.oxml.ns import qn as _qn
-        for tbl_elem in cell._tc.findall('.//' + _qn('w:tbl')):
+        for tbl_elem in cell._tc.findall('.//' + qn('w:tbl')):
             from docx.table import Table as _T
             for row in _T(tbl_elem, doc).rows:
                 for c in row.cells:
@@ -214,7 +227,7 @@ def _apply_font(doc, font_name):
 
     for para in doc.paragraphs:
         for run in para.runs:
-            run.font.name = font_name
+            _set_run_font(run)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
@@ -228,20 +241,25 @@ def _set_cell_text(cell, txt):
             return
     cell.paragraphs[0].add_run(txt)
 
-def _clear_cell_and_set(cell, txt):
+def _clear_cell_and_set(cell, txt, font_name=None):
     """셀의 기존 단락을 모두 제거하고 새 텍스트 단락으로 교체"""
     tc = cell._tc
     p_elems = list(tc.findall(qn("w:p")))
-    # 두 번째 이후 단락 XML 요소 제거 (템플릿 잔여 단락 삭제)
     for pe in p_elems[1:]:
         tc.remove(pe)
-    # 첫 단락 런 초기화 후 새 텍스트 설정
     first = cell.paragraphs[0]
     for r in first.runs: r.text = ""
-    if first.runs:
-        first.runs[0].text = txt
-    else:
-        first.add_run(txt)
+    run = first.runs[0] if first.runs else first.add_run()
+    run.text = txt
+    # 폰트 직접 설정 (한글 East Asian 포함)
+    if font_name:
+        rPr = run._r.get_or_add_rPr()
+        rFonts = rPr.find(qn("w:rFonts"))
+        if rFonts is None:
+            rFonts = OxmlElement("w:rFonts")
+            rPr.insert(0, rFonts)
+        for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+            rFonts.set(qn(attr), font_name)
 
 
 # 1. 손익분석서
@@ -492,7 +510,7 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     _replace_doc(doc, "계약금액 : 금액표시",    f"계약금액 : \u20a9{revenue:,}")
     _replace_doc(doc, "계약금액 표시",          f"\u20a9{revenue:,}")
     # 표1: 세부내역·담당자
-    _clear_cell_and_set(t1.rows[8].cells[1], new_detail)
+    _clear_cell_and_set(t1.rows[8].cells[1], new_detail, font_name="나눔고딕")
     _set_cell_text(t1.rows[12].cells[1], cn)
     _set_cell_text(t1.rows[12].cells[2], cp)
     _set_cell_text(t1.rows[12].cells[5], ce)
