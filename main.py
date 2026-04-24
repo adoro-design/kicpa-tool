@@ -350,6 +350,12 @@ def import_page(request: Request):
     require_login(request)
     return templates.TemplateResponse("import.html", {"request": request, "user": get_user(request), "msg": "", "msg_type": ""})
 
+def _to_int(val):
+    """Excel 숫자값을 정수로 변환 (4.0 → 4, '4' → 4, None → None)"""
+    if val is None: return None
+    try: return int(float(str(val)))
+    except: return None
+
 @app.post("/import")
 async def import_excel(request: Request, year: int = Form(2026), import_mode: str = Form("append"),
                        excel_file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -430,14 +436,14 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 course_name=course_name, required_optional=str(row[3] or "") or None,
                 original_code=str(row[4] or "") or None, category=str(row[5] or "") or None,
                 course_code=str(row[6] or "") or None,
-                session_count=int(row[7]) if row[7] and str(row[7]).isdigit() else None,
-                chapter_count=int(row[8]) if row[8] and str(row[8]).isdigit() else None,
+                session_count=_to_int(row[7]),
+                chapter_count=_to_int(row[8]),
                 instructor=str(row[9] or "") or None, department=str(row[10] or "") or None,
                 kicpa_manager=str(row[11] or "") or None, filming_consent=str(row[12] or "") or None,
                 shooting_date=shoot_date, shooting_time=str(row[14] or "") or None,
                 shooting_format=str(row[15] or "") or None, location=str(row[16] or "") or None,
                 has_quiz=str(row[17] or "") or None,
-                quiz_count=int(row[18]) if row[18] and str(row[18]).isdigit() else None,
+                quiz_count=_to_int(row[18]),
                 materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
                 dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
                 open_date=to_date(row[23]), billing=str(row[24] or "") or None,
