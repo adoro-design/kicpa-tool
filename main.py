@@ -562,8 +562,15 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
 @app.get("/price_table", response_class=HTMLResponse)
 def price_table_page(request: Request, db: Session = Depends(get_db)):
     require_admin(request)
-    prices = db.query(PriceTable).order_by(PriceTable.category, PriceTable.id).all()
-    return templates.TemplateResponse("price_table.html", {"request": request, "user": get_user(request), "prices": prices, "msg": ""})
+    prices = db.query(PriceTable).order_by(PriceTable.type_name, PriceTable.effective_from.desc().nullslast(), PriceTable.id).all()
+    # 오늘 기준 현재 유효 단가 (요약용)
+    today = date.today()
+    current_prices = get_price_table_for_month(db, today.year, today.month)
+    return templates.TemplateResponse("price_table.html", {
+        "request": request, "user": get_user(request),
+        "prices": prices, "msg": "",
+        "current_prices": current_prices, "today": today,
+    })
 
 @app.post("/price_table/update")
 async def price_table_update(request: Request, db: Session = Depends(get_db)):

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}계산 설정 관리{% endblock %}
-{% block page_title %}계산 설정 관리{% endblock %}
+{% block title %}손익분석서 설정{% endblock %}
+{% block page_title %}손익분석서 설정{% endblock %}
 
 {% block content %}
 <!-- 현재 유효 설정 요약 -->
@@ -27,7 +27,7 @@
 <div class="form-section mb-4">
   <div class="form-section-title">새 설정값 추가 (변경 적용일 입력)</div>
   <form method="post" action="/calc_settings/add">
-    <div class="row g-2 align-items-end">
+    <div class="row g-2 align-items-start">
       <div class="col-md-3">
         <label class="form-label">설정 항목 <span class="text-danger">*</span></label>
         <select name="setting_name" class="form-select" required>

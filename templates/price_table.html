@@ -18,6 +18,25 @@
   아래 모든 단가는 <strong>VAT 별도</strong> 금액입니다. 정산 시 VAT(10%)가 추가됩니다.
 </div>
 
+<!-- 현재 유효 단가 요약 -->
+<div class="form-section mb-4">
+  <div class="form-section-title">현재 유효 단가 ({{ today | fmt_date }} 기준)</div>
+  <div class="row g-2">
+    {% for name, price in current_prices.items() %}
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body py-2 px-3">
+          <div style="font-size:.75rem; color:#888;">{{ name }}</div>
+          <div style="font-size:1rem; font-weight:700; color:#1a2340;">
+            {% if price %}{{ "{:,}".format(price) }}원{% else %}<span class="text-muted">별도 협의</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
 <!-- 단가 수정 폼 -->
 <form method="post" action="/price_table/update" id="priceForm">
 <div class="row g-4">
@@ -30,9 +49,18 @@
     <div class="form-section">
       <div class="form-section-title">{{ cat_label }}</div>
       {% for p in prices if p.category == cat_key %}
-      <div class="price-row">
+      {% set is_current = (current_prices.get(p.type_name) == p.unit_price) %}
+      <div class="price-row" style="{% if not p.is_active %}opacity:.5;{% endif %}">
         <input type="hidden" name="id_{{ p.id }}" value="{{ p.id }}">
-        <div class="price-name">{{ p.type_name }}</div>
+        <div class="price-name">
+          {{ p.type_name }}
+          {% if p.effective_from %}
+          <br><span style="font-size:.7rem; color:#888;">{{ p.effective_from | fmt_date }}~</span>
+          {% if is_current %}<span style="font-size:.7rem; color:#1e8e3e; font-weight:600;"> ✔ 적용중</span>{% endif %}
+          {% else %}
+          {% if is_current %}<span style="font-size:.7rem; color:#1e8e3e; font-weight:600;"> ✔ 적용중</span>{% endif %}
+          {% endif %}
+        </div>
         <input type="number" name="price_{{ p.id }}" class="form-control price-input"
                value="{{ p.unit_price or '' }}" step="1000" placeholder="별도협의">
         <div class="price-unit">원/{{ p.unit }}</div>
@@ -94,7 +122,7 @@
 <div class="form-section mt-4">
   <div class="form-section-title">새 항목 추가</div>
   <form method="post" action="/price_table/add">
-    <div class="row g-2 align-items-end">
+    <div class="row g-2 align-items-start">
       <div class="col-md-2">
         <label class="form-label">구분</label>
         <select name="category" class="form-select form-select-sm" required>
@@ -125,45 +153,4 @@
         <label class="form-label">적용 시작일</label>
         <input type="date" name="effective_from" class="form-control form-control-sm">
         <div style="font-size:.7rem; color:#888; margin-top:2px;">비워두면 항상 유효</div>
-      </div>
-      <div class="col-md-1">
-        <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi-plus-lg"></i> 추가</button>
-      </div>
-    </div>
-  </form>
-</div>
-
-<!-- 단가표 요약 -->
-<div class="form-section mt-4">
-  <div class="form-section-title d-flex justify-content-between align-items-center">
-    단가표 요약
-    <span style="font-size:.75rem; font-weight:400; color:#e67700; letter-spacing:0;">
-      <i class="bi-exclamation-circle me-1"></i>모든 단가 VAT 별도
-    </span>
-  </div>
-  <table class="table table-sm" style="font-size:.84rem;">
-    <thead>
-      <tr style="background:#f8f9fc;">
-        <th>구분</th><th>항목</th><th class="text-end">단가 (VAT별도)</th><th>단위</th><th>비고</th><th>상태</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in prices %}
-      <tr>
-        <td><span style="font-size:.72rem; color:#888;">{{ p.category }}</span></td>
-        <td>{{ p.type_name }}</td>
-        <td class="text-end font-monospace">
-          {% if p.unit_price is not none %}{{ "{:,}".format(p.unit_price) }}원{% else %}별도 협의{% endif %}
-        </td>
-        <td>{{ p.unit or '-' }}</td>
-        <td style="font-size:.76rem; color:#888;">{{ p.note or '' }}</td>
-        <td>
-          {% if p.is_active %}<span class="badge bg-success" style="font-size:.7rem;">사용중</span>
-          {% else %}<span class="badge bg-secondary" style="font-size:.7rem;">미사용</span>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endblock %}
+      </d
