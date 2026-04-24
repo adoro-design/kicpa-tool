@@ -174,6 +174,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
     # 청구월이 있는 (부서, 월) 조합만 계산
     combos = db.query(Content.department, Content.billing_month).filter_by(year=year)\
                .filter(Content.billing_month != None, Content.billing_month != "").distinct().all()
+    dept_monthly    = {}   # {부서: {월: 금액}}
     _price_cache = {}
     for dept, m in combos:
         if m not in MONTH_ORDER:
@@ -186,6 +187,9 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
         rev = docgen.calc_revenue(courses, price_tbl)
         monthly_revenue[m] = monthly_revenue.get(m, 0) + rev
         dept_revenue[dept] = dept_revenue.get(dept, 0) + rev
+        if dept not in dept_monthly:
+            dept_monthly[dept] = {}
+        dept_monthly[dept][m] = dept_monthly[dept].get(m, 0) + rev
 
     # ── 촬영형식 분포 ────────────────────────────────
     fmt_rows = db.query(Content.shooting_format).filter_by(year=year)\
@@ -214,6 +218,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
         "dept_summary": dept_summary,
         "monthly_revenue": {m: monthly_revenue.get(m, 0) for m in MONTHS},
         "dept_revenue": dept_revenue,
+        "dept_monthly": dept_monthly,
         "format_counts": format_counts,
         "this_month_courses": this_month_courses,
         "not_opened": not_opened,
