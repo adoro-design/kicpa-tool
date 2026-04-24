@@ -194,7 +194,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     quiz_count: str=Form(""), materials_supply: str=Form(""), video_marking: str=Form(""),
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
     billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""),
-    travel_hours: str=Form(""), travel_expense: str=Form(""),
+    travel_hours: str=Form(""), travel_days: str=Form(""), travel_expense: str=Form(""),
     notes: str=Form(""), db: Session = Depends(get_db)):
     require_login(request)
 
@@ -220,6 +220,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         billing_month=normalize_month(billing_month),
         custom_price=to_int(custom_price),
         travel_hours=to_int(travel_hours),
+        travel_days=to_int(travel_days),
         travel_expense=to_int(travel_expense), notes=notes or None)
 
     if id:

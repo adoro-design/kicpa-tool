@@ -64,6 +64,7 @@ class Content(Base):
     billing_month       = Column(String(20))       # 비용청구 월 (엑셀 기준)
     custom_price        = Column(Integer)          # 별도 단가 (단가표 우선 적용)
     travel_hours        = Column(Integer)          # 출장 시간 (시간 × 단가 자동 계산)
+    travel_days         = Column(Integer)          # 출장 일수 (표시용)
     travel_expense      = Column(Integer)          # 출장비 직접 입력 (우선 적용)
     notes               = Column(Text)
     created_at          = Column(DateTime, server_default=func.now())
@@ -125,6 +126,7 @@ def init_db():
         "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
         "ALTER TABLE kicpa_contents ADD COLUMN billing_month VARCHAR(20)",
         "ALTER TABLE kicpa_contents ADD COLUMN travel_hours INTEGER",
+        "ALTER TABLE kicpa_contents ADD COLUMN travel_days INTEGER",
         "ALTER TABLE kicpa_contents ADD COLUMN travel_expense INTEGER",
     ]:
         try:

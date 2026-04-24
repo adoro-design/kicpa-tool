@@ -264,7 +264,9 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                     13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
         else:
             th    = c.travel_hours or 1
-            tname = f"{c.course_name} 출장 : {th}시간"
+            td    = getattr(c, 'travel_days', None)
+            day_str = f"({td}일)" if td else ""
+            tname = f"{c.course_name} 출장 : {th}시간{day_str}"
             vals  = {1:"", 2:"출장비",
                      3:tname, 4:"", 5:"",
                      6:th, 7:"", 8:"", 9:"", 10:"", 11:"",

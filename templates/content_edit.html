@@ -152,6 +152,13 @@
                  value="{{ row.travel_hours if row and row.travel_hours is not none else '' }}">
           <div style="font-size:.72rem; color:#888; margin-top:3px;">시간 × 100,000원 자동 계산</div>
         </div>
+        <div class="col-md-2">
+          <label class="form-label">출장 일수 <small class="text-muted">(일)</small></label>
+          <input type="number" name="travel_days" class="form-control" min="1" step="1"
+                 placeholder="예: 2"
+                 value="{{ row.travel_days if row and row.travel_days is not none else '' }}">
+          <div style="font-size:.72rem; color:#888; margin-top:3px;">문서 표시용</div>
+        </div>
         <div class="col-md-3">
           <label class="form-label">출장비 직접 입력 <small class="text-muted">(우선 적용)</small></label>
           <input type="number" name="travel_expense" class="form-control" step="10000"
