@@ -97,9 +97,14 @@ def get_unit_price_for(cr, price_tbl):
     return PRICE_NEW
 
 def get_travel_for(cr, travel_rate=PRICE_TRAVEL_HR):
+    """출장비 계산: 1일 4시간 초과 시 4시간으로 캡 적용"""
     if not cr.shooting_format or "출장" not in cr.shooting_format: return 0
     if cr.travel_expense is not None: return cr.travel_expense
-    if cr.travel_hours: return cr.travel_hours * travel_rate
+    if cr.travel_hours:
+        hours = cr.travel_hours
+        days  = getattr(cr, 'travel_days', None)
+        capped = min(hours, days * 4) if days and days > 0 else hours
+        return capped * travel_rate
     return travel_rate
 
 def calc_period(courses, year, month_num):

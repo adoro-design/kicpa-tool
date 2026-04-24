@@ -468,15 +468,19 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         return match_price(content_row.shooting_format or "")
 
     def get_travel_expense(content_row):
-        """출장 과정의 출장비 계산
-        우선순위: 직접입력(travel_expense) > 시간계산(travel_hours × 단가) > 기본 1시간(단가)
+        """출장비 계산
+        우선순위: 직접입력 > 시간계산(1일 4시간 초과 시 4시간 캡) > 기본 1시간
         """
         if not content_row.shooting_format or "출장" not in content_row.shooting_format:
             return 0
         if content_row.travel_expense is not None:
             return content_row.travel_expense
         if content_row.travel_hours:
-            return content_row.travel_hours * travel_rate
+            hours = content_row.travel_hours
+            days  = getattr(content_row, 'travel_days', None)
+            # 1일 4시간 초과분 캡 적용
+            capped = min(hours, days * 4) if days and days > 0 else hours
+            return capped * travel_rate
         return travel_rate  # 기본 1시간
 
     # billing 템플릿 하위 호환용
