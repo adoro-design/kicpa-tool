@@ -32,6 +32,7 @@
         <input type="text" name="note" class="form-control">
       </div>
       <div class="col-md-1">
+        <label class="form-label">&nbsp;</label>
         <button type="submit" class="btn btn-primary w-100"><i class="bi-plus-lg"></i></button>
       </div>
     </div>
@@ -64,12 +65,14 @@
         <td style="font-size:.84rem;">{{ c.email or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.note or '-' }}</td>
         <td>
-          <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;"
-            onclick="openEdit({{ c.id }}, '{{ c.department }}', '{{ c.contact_name or '' }}', '{{ c.phone or '' }}', '{{ c.email or '' }}', '{{ c.note or '' }}')">수정</button>
-          <form method="post" action="/customers/delete/{{ c.id }}" style="display:inline;"
-            onsubmit="return confirm('삭제하시겠습니까?')">
-            <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.75rem; padding:2px 8px;">삭제</button>
-          </form>
+          <div style="display:flex; gap:4px; white-space:nowrap;">
+            <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;"
+              onclick="openEdit({{ c.id }}, '{{ c.department }}', '{{ c.contact_name or '' }}', '{{ c.phone or '' }}', '{{ c.email or '' }}', '{{ c.note or '' }}')">수정</button>
+            <form method="post" action="/customers/delete/{{ c.id }}" style="display:inline;"
+              onsubmit="return confirm('삭제하시겠습니까?')">
+              <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.75rem; padding:2px 8px;">삭제</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% else %}
