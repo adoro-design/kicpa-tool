@@ -238,6 +238,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
         "format_counts": format_counts,
         "this_month_courses": this_month_courses,
         "not_opened": not_opened,
+        "is_current_year": is_current_year,
         "recent": recent,
         "today": today,
         "MONTHS": MONTHS,
@@ -550,7 +551,14 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             c.location          = cell(16, 200) or None
             c.open_date         = to_date_str(cell(23))
             c.billing           = cell(24, 100) or None
-            c.billing_month     = cell(25, 20)  or None   # Z열
+            # Z열 청구월 — "3월", "3", "03", "3월 청구" 등 다양한 형식 정규화
+            raw_bm = cell(25, 20)
+            if raw_bm:
+                import re as _re
+                m_match = _re.search(r'(\d{1,2})월?', raw_bm)
+                c.billing_month = f"{int(m_match.group(1))}월" if m_match else None
+            else:
+                c.billing_month = None
 
             # 수동 데이터 복원
             key = clean_name(name_cleaned).strip()
