@@ -11,3 +11,5 @@ openpyxl==3.1.2
 python-docx==1.1.0
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
+gspread==6.1.2
+google-auth==2.29.0

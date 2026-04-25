@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Excel 가져오기{% endblock %}
-{% block page_title %}Excel 가져오기{% endblock %}
+{% block title %}데이터 가져오기{% endblock %}
+{% block page_title %}데이터 가져오기{% endblock %}
 
 {% block content %}
 {% if msg %}
@@ -26,9 +26,52 @@
       </div>
     </div>
 
+    <!-- 구글 시트 동기화 -->
+    {% if gsheet_ok %}
+    <div class="form-section mb-4">
+      <div class="form-section-title">
+        <i class="bi-google me-1" style="color:#4285F4;"></i>구글 시트 동기화
+        <span class="badge bg-success ms-2" style="font-size:.7rem;">연결됨</span>
+      </div>
+      <form method="post" action="/import/gsheet">
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-auto">
+            <label class="form-label">연도</label>
+            <select name="year" class="form-select" style="width:120px;">
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+          <div class="col">
+            <label class="form-label">가져오기 방식</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="import_mode" id="gs_append" value="append" checked>
+                <label class="form-check-label" for="gs_append"><strong>추가</strong></label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="import_mode" id="gs_replace" value="replace">
+                <label class="form-check-label" for="gs_replace"><strong>교체</strong> <span class="badge bg-danger">주의</span></label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi-arrow-repeat me-1"></i>구글 시트에서 동기화
+        </button>
+      </form>
+    </div>
+    {% else %}
+    <div class="alert alert-warning mb-4" style="font-size:.84rem;">
+      <i class="bi-exclamation-triangle me-1"></i>
+      구글 시트 연동이 설정되지 않았습니다. Render 환경변수에 <code>GOOGLE_CLIENT_EMAIL</code>, <code>GOOGLE_PRIVATE_KEY</code>, <code>GOOGLE_SPREADSHEET_ID</code>를 등록해주세요.
+    </div>
+    {% endif %}
+
     <!-- 폼 -->
     <div class="form-section">
-      <div class="form-section-title">Excel 업로드</div>
+      <div class="form-section-title">Excel 파일 업로드 (이전 연도)</div>
       <form method="post" action="/import" enctype="multipart/form-data">
         <div class="mb-3">
           <label class="form-label">연도</label>

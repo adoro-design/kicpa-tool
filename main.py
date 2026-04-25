@@ -407,7 +407,151 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
 @app.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
     require_login(request)
-    return templates.TemplateResponse("import.html", {"request": request, "user": get_user(request), "msg": "", "msg_type": ""})
+    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
+    return templates.TemplateResponse("import.html", {
+        "request": request, "user": get_user(request),
+        "msg": "", "msg_type": "", "gsheet_ok": gsheet_ok
+    })
+
+# ── 구글 시트 동기화 ─────────────────────────────
+@app.post("/import/gsheet")
+async def import_gsheet(request: Request, year: int = Form(2026),
+                        import_mode: str = Form("append"), db: Session = Depends(get_db)):
+    require_login(request)
+    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
+    def fail(msg):
+        return templates.TemplateResponse("import.html", {
+            "request": request, "user": get_user(request),
+            "msg": msg, "msg_type": "danger", "gsheet_ok": gsheet_ok
+        })
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        SCOPES = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        private_key = os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n")
+        creds = Credentials.from_service_account_info({
+            "type": "service_account",
+            "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+            "private_key": private_key,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }, scopes=SCOPES)
+        gc = gspread.authorize(creds)
+        spreadsheet = gc.open_by_key(os.getenv("GOOGLE_SPREADSHEET_ID"))
+        ws = spreadsheet.worksheet("개발관리")
+        rows = ws.get_all_values()  # 전체 행 가져오기 (인덱스 0부터)
+
+    except Exception as e:
+        return fail(f"구글 시트 연결 실패: {e}")
+
+    try:
+        import datetime
+        # replace 모드: 수동 데이터 보존 후 삭제
+        manual_data = {}
+        if import_mode == "replace":
+            for r in db.query(Content).filter_by(year=year).all():
+                key = clean_name(r.course_name or "").strip()
+                if key:
+                    manual_data[key] = {
+                        "custom_price":   r.custom_price,
+                        "travel_hours":   r.travel_hours,
+                        "travel_expense": r.travel_expense,
+                        "notes":          r.notes,
+                    }
+            db.query(Content).filter_by(year=year).delete()
+            db.commit()
+
+        def to_date_str(v):
+            if not v: return None
+            v = str(v).strip()
+            if not v: return None
+            try: return date.fromisoformat(v[:10])
+            except: pass
+            try:
+                for fmt in ("%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d", "%Y-%m-%d"):
+                    try: return datetime.datetime.strptime(v, fmt).date()
+                    except: pass
+            except: pass
+            return None
+
+        def to_int_gs(v):
+            if not v: return None
+            try: return int(float(str(v).strip()))
+            except: return None
+
+        prev_month = ""
+        imported = 0
+        # 구글 시트는 0-indexed, 4행부터 = index 3부터
+        for row in rows[3:]:
+            # 최소 3개 컬럼 이상이어야 유효
+            def cell(i): return str(row[i]).strip() if i < len(row) else ""
+
+            raw_name = cell(2)
+            if not raw_name: continue
+
+            month_val = cell(1)
+            if month_val: prev_month = month_val
+
+            name_parts = re.split(r'\s*\n*\s*==>', raw_name)
+            name_cleaned = ""
+            for line in name_parts[0].split('\n'):
+                cleaned = re.sub(r'\[.*?\]', '', line).strip()
+                if cleaned:
+                    name_cleaned = cleaned
+                    break
+            if not name_cleaned: name_cleaned = raw_name[:200]
+
+            # 기존 레코드 확인 (append 모드)
+            existing = None
+            if import_mode == "append":
+                existing = db.query(Content).filter_by(
+                    year=year, course_name=name_cleaned
+                ).first()
+
+            c = existing or Content(year=year)
+            c.shooting_month    = prev_month or None
+            c.course_name       = name_cleaned
+            c.required_optional = cell(3) or None
+            c.original_code     = cell(4) or None
+            c.category          = cell(5) or None
+            c.course_code       = cell(6) or None
+            c.session_count     = to_int_gs(cell(7))
+            c.chapter_count     = to_int_gs(cell(8))
+            c.instructor        = cell(9) or None
+            c.department        = cell(10) or None
+            c.kicpa_manager     = cell(11) or None
+            c.shooting_date     = to_date_str(cell(13))
+            c.shooting_time     = cell(14) or None
+            c.shooting_format   = cell(15) or None
+            c.location          = cell(16) or None
+            c.open_date         = to_date_str(cell(23))
+            c.billing           = cell(24) or None
+
+            # 수동 데이터 복원
+            key = clean_name(name_cleaned).strip()
+            if key in manual_data:
+                md = manual_data[key]
+                if md.get("custom_price")   is not None: c.custom_price   = md["custom_price"]
+                if md.get("travel_hours")   is not None: c.travel_hours   = md["travel_hours"]
+                if md.get("travel_expense") is not None: c.travel_expense = md["travel_expense"]
+                if md.get("notes")          is not None: c.notes          = md["notes"]
+
+            if not existing:
+                db.add(c)
+            imported += 1
+
+        db.commit()
+        return templates.TemplateResponse("import.html", {
+            "request": request, "user": get_user(request),
+            "msg": f"구글 시트에서 {imported}건 동기화 완료 ({year}년, {import_mode} 모드)",
+            "msg_type": "success", "gsheet_ok": gsheet_ok
+        })
+    except Exception as e:
+        db.rollback()
+        return fail(f"동기화 처리 중 오류: {e}")
 
 def _to_int(val):
     """Excel 숫자값을 정수로 변환 (4.0 → 4, '4' → 4, None → None)"""
