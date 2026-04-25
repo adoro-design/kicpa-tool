@@ -376,9 +376,6 @@ const PALETTE = ['#1a56db','#0891b2','#059669','#d97706','#7c3aed','#db2777','#0
 
 // ── 부서별 월별 비교 (그룹 막대) ──
 (function(){
-
-// ── 부서별 월별 비교 (그룹 막대) ──
-(function(){
   const ctx = document.getElementById('deptMonthlyChart');
   if (!ctx) return;
   const deptMonthly = {{ dept_monthly | tojson }};
