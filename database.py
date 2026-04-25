@@ -38,7 +38,7 @@ class Content(Base):
     shooting_month      = Column(String(20))
     course_name         = Column(Text)
     required_optional   = Column(String(50))
-    original_code       = Column(String(100))
+    original_code       = Column(Text)
     category            = Column(Text)
     course_code         = Column(String(200))
     session_count       = Column(Integer)

@@ -117,7 +117,16 @@ templates.env.globals["MONTHS"] = MONTHS
 templates.env.globals["normalize_month"] = normalize_month
 
 @app.on_event("startup")
-def startup(): init_db()
+def startup():
+    init_db()
+    # original_code 컬럼 타입 마이그레이션 (String(100) → Text)
+    try:
+        from sqlalchemy import text as sa_text
+        with next(get_db()) as db:
+            db.execute(sa_text("ALTER TABLE kicpa_contents ALTER COLUMN original_code TYPE TEXT"))
+            db.commit()
+    except Exception:
+        pass
 
 # ── 인증 ────────────────────────────────────────
 @app.get("/login", response_class=HTMLResponse)
@@ -489,7 +498,10 @@ async def import_gsheet(request: Request, year: int = Form(2026),
         # 구글 시트는 0-indexed, 4행부터 = index 3부터
         for row in rows[3:]:
             # 최소 3개 컬럼 이상이어야 유효
-            def cell(i): return str(row[i]).strip() if i < len(row) else ""
+            def cell(i, maxlen=None):
+                v = str(row[i]).strip() if i < len(row) else ""
+                if maxlen and len(v) > maxlen: v = v[:maxlen]
+                return v
 
             raw_name = cell(2)
             if not raw_name: continue
@@ -514,23 +526,23 @@ async def import_gsheet(request: Request, year: int = Form(2026),
                 ).first()
 
             c = existing or Content(year=year)
-            c.shooting_month    = prev_month or None
+            c.shooting_month    = (prev_month or None)
             c.course_name       = name_cleaned
-            c.required_optional = cell(3) or None
-            c.original_code     = cell(4) or None
-            c.category          = cell(5) or None
-            c.course_code       = cell(6) or None
+            c.required_optional = cell(3, 50)  or None
+            c.original_code     = cell(4)      or None   # Text — 길이 제한 없음
+            c.category          = cell(5)      or None
+            c.course_code       = cell(6, 200) or None
             c.session_count     = to_int_gs(cell(7))
             c.chapter_count     = to_int_gs(cell(8))
-            c.instructor        = cell(9) or None
-            c.department        = cell(10) or None
-            c.kicpa_manager     = cell(11) or None
+            c.instructor        = cell(9, 200) or None
+            c.department        = cell(10, 100) or None
+            c.kicpa_manager     = cell(11, 100) or None
             c.shooting_date     = to_date_str(cell(13))
-            c.shooting_time     = cell(14) or None
-            c.shooting_format   = cell(15) or None
-            c.location          = cell(16) or None
+            c.shooting_time     = cell(14, 100) or None
+            c.shooting_format   = cell(15, 100) or None
+            c.location          = cell(16, 200) or None
             c.open_date         = to_date_str(cell(23))
-            c.billing           = cell(24) or None
+            c.billing           = cell(24, 100) or None
 
             # 수동 데이터 복원
             key = clean_name(name_cleaned).strip()
