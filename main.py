@@ -186,7 +186,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
     dept_monthly    = {}   # {부서: {월: 금액}}
     _price_cache = {}
     for dept, m in combos:
-        if m not in MONTH_ORDER:
+        if not dept or m not in MONTH_ORDER:
             continue
         m_num = MONTH_ORDER[m] + 1
         if m_num not in _price_cache:
