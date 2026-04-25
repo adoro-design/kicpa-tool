@@ -205,19 +205,26 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
                  .filter(Content.shooting_format != None).all()
     format_counts = dict(Counter(r[0] for r in fmt_rows if r[0]))
 
-    # ── 이번달 촬영 예정 ──────────────────────────────
-    this_month_courses = db.query(Content).filter_by(year=year).filter(
-        func.extract("month", Content.shooting_date) == today.month,
-        func.extract("year",  Content.shooting_date) == today.year
-    ).order_by(Content.shooting_date).all()
+    # ── 이번달 촬영 예정 (현재 연도만) ──────────────────
+    is_current_year = (year == today.year)
+    if is_current_year:
+        this_month_courses = db.query(Content).filter_by(year=year).filter(
+            func.extract("month", Content.shooting_date) == today.month,
+            func.extract("year",  Content.shooting_date) == today.year
+        ).order_by(Content.shooting_date).all()
+    else:
+        this_month_courses = []
 
-    # ── 미오픈 현황 (촬영완료, 오픈 미완료) ───────────
-    not_opened_raw = db.query(Content).filter_by(year=year).filter(
-        Content.shooting_date != None,
-        Content.open_date == None
-    ).order_by(Content.shooting_date).all()
-    not_opened = [(c, (today - c.shooting_date).days) for c in not_opened_raw]
-    not_opened.sort(key=lambda x: x[1], reverse=True)
+    # ── 미오픈 현황 (현재 연도만) ─────────────────────
+    if is_current_year:
+        not_opened_raw = db.query(Content).filter_by(year=year).filter(
+            Content.shooting_date != None,
+            Content.open_date == None
+        ).order_by(Content.shooting_date).all()
+        not_opened = [(c, (today - c.shooting_date).days) for c in not_opened_raw]
+        not_opened.sort(key=lambda x: x[1], reverse=True)
+    else:
+        not_opened = []
 
     recent = db.query(Content).filter_by(year=year).order_by(Content.id.desc()).limit(8).all()
 
@@ -543,6 +550,7 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             c.location          = cell(16, 200) or None
             c.open_date         = to_date_str(cell(23))
             c.billing           = cell(24, 100) or None
+            c.billing_month     = cell(25, 20)  or None   # Z열
 
             # 수동 데이터 복원
             key = clean_name(name_cleaned).strip()
