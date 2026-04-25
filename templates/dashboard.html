@@ -32,10 +32,10 @@
   {% endfor %}
 </div>
 
-<!-- ① KPI 카드 -->
+<!-- ① KPI 카드 (차시수 기준) -->
 <div class="row g-3 mb-4">
   {% for icon, label, val, color, bg in [
-    ('mdi:folder-multiple-outline', '전체 콘텐츠', total,  '#1a56db', '#eff3ff'),
+    ('mdi:folder-multiple-outline', '전체 차시',   total,  '#1a56db', '#eff3ff'),
     ('mdi:video-check-outline',     '촬영 완료',   shot,   '#0891b2', '#ecfeff'),
     ('mdi:play-circle-outline',     '오픈 완료',   opened, '#059669', '#ecfdf5'),
     ('mdi:receipt-outline',         '청구 완료',   billed, '#d97706', '#fffbeb')
@@ -44,7 +44,9 @@
     <div class="stat-card d-flex justify-content-between align-items-center">
       <div>
         <div class="stat-label">{{ label }}</div>
-        <div style="font-size:1.9rem; font-weight:800; color:{{ color }}; line-height:1.1;">{{ val }}</div>
+        <div style="font-size:1.9rem; font-weight:800; color:{{ color }}; line-height:1.1;">
+          {{ val }}<span style="font-size:.9rem; font-weight:500; color:{{ color }}; opacity:.7; margin-left:3px;">차시</span>
+        </div>
       </div>
       <div class="stat-icon" style="background:{{ bg }}; color:{{ color }};">
         <iconify-icon icon="{{ icon }}" width="26" height="26"></iconify-icon>
@@ -54,63 +56,43 @@
   {% endfor %}
 </div>
 
-<!-- ② 월별 매출추이 + 미오픈 현황 -->
 {% set total_monthly = monthly_revenue.values() | sum %}
 {% set total_dept = dept_revenue.values() | sum %}
+
+{% if is_current_year %}
+<!-- ② 현재연도: 월별 매출추이 + 미오픈 현황 -->
 <div class="row g-3 mb-4">
   <div class="col-md-8">
     <div class="dash-card">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:chart-line" width="16" style="color:#1a56db;"></iconify-icon>
-          월별 매출추이
-        </span>
+        <span class="title"><iconify-icon icon="mdi:chart-line" width="16" style="color:#1a56db;"></iconify-icon> 월별 매출추이</span>
         <span class="total-badge">연간 합계 ₩{{ "{:,}".format(total_monthly) }}</span>
       </div>
-      <div class="dash-card-body" style="position:relative; height:220px;">
-        <canvas id="monthlyChart"></canvas>
-      </div>
+      <div class="dash-card-body" style="position:relative; height:220px;"><canvas id="monthlyChart"></canvas></div>
     </div>
   </div>
-  {% if is_current_year %}
   <div class="col-md-4">
     <div class="dash-card">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:clock-alert-outline" width="16" style="color:#d97706;"></iconify-icon>
-          미오픈 현황
-        </span>
+        <span class="title"><iconify-icon icon="mdi:clock-alert-outline" width="16" style="color:#d97706;"></iconify-icon> 미오픈 현황</span>
         <span class="badge bg-warning text-dark">{{ not_opened|length }}건</span>
       </div>
       <div style="max-height:220px; overflow-y:auto;">
         {% if not_opened %}
         <table class="table table-hover" style="font-size:.8rem; margin-bottom:0;">
-          <thead>
-            <tr>
-              <th style="padding-left:18px;">과정명</th>
-              <th class="text-center">경과일</th>
-            </tr>
-          </thead>
+          <thead><tr><th style="padding-left:18px;">과정명</th><th class="text-center">경과일</th></tr></thead>
           <tbody>
           {% for c, days in not_opened[:8] %}
           <tr>
-            <td style="padding-left:18px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ c.course_name }}">
-              {{ c.course_name | clean_name }}
-            </td>
+            <td style="padding-left:18px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ c.course_name }}">{{ c.course_name | clean_name }}</td>
             <td class="text-center">
-              {% if days >= 60 %}
-              <span class="badge bg-danger">{{ days }}일</span>
-              {% elif days >= 30 %}
-              <span class="badge bg-warning text-dark">{{ days }}일</span>
-              {% else %}
-              <span class="badge bg-light text-muted border">{{ days }}일</span>
-              {% endif %}
+              {% if days >= 60 %}<span class="badge bg-danger">{{ days }}일</span>
+              {% elif days >= 30 %}<span class="badge bg-warning text-dark">{{ days }}일</span>
+              {% else %}<span class="badge bg-light text-muted border">{{ days }}일</span>{% endif %}
             </td>
           </tr>
           {% endfor %}
-          {% if not_opened|length > 8 %}
-          <tr><td colspan="2" class="text-center text-muted py-2" style="font-size:.75rem;">외 {{ not_opened|length - 8 }}건</td></tr>
-          {% endif %}
+          {% if not_opened|length > 8 %}<tr><td colspan="2" class="text-center text-muted py-2" style="font-size:.75rem;">외 {{ not_opened|length - 8 }}건</td></tr>{% endif %}
           </tbody>
         </table>
         {% else %}
@@ -119,107 +101,125 @@
       </div>
     </div>
   </div>
-  {% endif %}
 </div>
 
-<!-- ③ 부서별 월별 비교 + 이번달 촬영 예정 -->
+<!-- ③ 현재연도: 부서별 월별 비교 + 이번달 촬영 예정 -->
 {% if dept_monthly %}
 <div class="row g-3 mb-4">
   <div class="col-md-8">
     <div class="dash-card">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:chart-bar-stacked" width="16" style="color:#059669;"></iconify-icon>
-          부서별 월별 매출 비교
-        </span>
+        <span class="title"><iconify-icon icon="mdi:chart-bar-stacked" width="16" style="color:#059669;"></iconify-icon> 부서별 월별 매출 비교</span>
       </div>
-      <div class="dash-card-body" style="position:relative; height:260px;">
-        <canvas id="deptMonthlyChart"></canvas>
-      </div>
+      <div class="dash-card-body" style="position:relative; height:260px;"><canvas id="deptMonthlyChart"></canvas></div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="dash-card h-100">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:calendar-today-outline" width="16" style="color:#059669;"></iconify-icon>
-          이번달 촬영 예정
-        </span>
+        <span class="title"><iconify-icon icon="mdi:calendar-today-outline" width="16" style="color:#059669;"></iconify-icon> 이번달 촬영 예정</span>
         <span class="text-muted" style="font-size:.8rem;">{{ today.month }}월 기준</span>
       </div>
       <div style="max-height:260px; overflow-y:auto;">
         {% if this_month_courses %}
-        <table class="table table-hover" style="font-size:.8rem; margin-bottom:0;">
-          <tbody>
-          {% for c in this_month_courses %}
-          <tr>
-            <td style="padding-left:18px;">
-              <div style="font-size:.82rem; font-weight:600; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                {{ c.course_name | clean_name }}
-              </div>
-              <div class="text-muted" style="font-size:.75rem;">
-                {{ c.department }} · {{ c.shooting_date.strftime('%m/%d') if c.shooting_date else '-' }}
-              </div>
-            </td>
-            <td class="text-end" style="white-space:nowrap; padding-right:18px;">
-              {% if c.shooting_format %}<span class="badge-format">{{ c.shooting_format }}</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="text-center py-4 text-muted" style="font-size:.85rem;">이번달 촬영 예정 없음</div>
-        {% endif %}
+        <table class="table table-hover" style="font-size:.8rem; margin-bottom:0;"><tbody>
+        {% for c in this_month_courses %}
+        <tr>
+          <td style="padding-left:18px;">
+            <div style="font-size:.82rem; font-weight:600; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.course_name | clean_name }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ c.department }} · {{ c.shooting_date.strftime('%m/%d') if c.shooting_date else '-' }}</div>
+          </td>
+          <td class="text-end" style="white-space:nowrap; padding-right:18px;">{% if c.shooting_format %}<span class="badge-format">{{ c.shooting_format }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody></table>
+        {% else %}<div class="text-center py-4 text-muted" style="font-size:.85rem;">이번달 촬영 예정 없음</div>{% endif %}
       </div>
     </div>
   </div>
 </div>
 {% endif %}
 
-<!-- ④ 부서별 매출 현황 + 미오픈 현황 -->
+<!-- ④ 현재연도: 부서별 매출 현황 + 촬영형식 분포 -->
 <div class="row g-3 mb-4">
   <div class="col-md-7">
     <div class="dash-card">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:office-building-outline" width="16" style="color:#0891b2;"></iconify-icon>
-          부서별 매출 현황
-        </span>
-        {% if total_dept > 0 %}
-        <span class="total-badge">합계 ₩{{ "{:,}".format(total_dept) }}</span>
-        {% endif %}
+        <span class="title"><iconify-icon icon="mdi:office-building-outline" width="16" style="color:#0891b2;"></iconify-icon> 부서별 매출 현황</span>
+        {% if total_dept > 0 %}<span class="total-badge">합계 ₩{{ "{:,}".format(total_dept) }}</span>{% endif %}
       </div>
       <div class="dash-card-body" style="position:relative; height:250px;">
-        {% if dept_revenue %}
-        <canvas id="deptChart"></canvas>
-        {% else %}
-        <div class="d-flex align-items-center justify-content-center h-100">
-          <span class="text-muted" style="font-size:.85rem;">청구 데이터 없음</span>
-        </div>
-        {% endif %}
+        {% if dept_revenue %}<canvas id="deptChart"></canvas>
+        {% else %}<div class="d-flex align-items-center justify-content-center h-100"><span class="text-muted" style="font-size:.85rem;">청구 데이터 없음</span></div>{% endif %}
       </div>
     </div>
   </div>
   <div class="col-md-5">
     <div class="dash-card">
       <div class="dash-card-header">
-        <span class="title">
-          <iconify-icon icon="mdi:chart-donut-variant" width="16" style="color:#7c3aed;"></iconify-icon>
-          촬영형식 분포
-        </span>
-        <span class="total-badge">{{ total }}건</span>
+        <span class="title"><iconify-icon icon="mdi:chart-donut-variant" width="16" style="color:#7c3aed;"></iconify-icon> 촬영형식 분포</span>
+        <span class="total-badge">{{ total }}차시</span>
       </div>
       <div class="dash-card-body d-flex align-items-center justify-content-center" style="height:250px;">
-        {% if format_counts %}
-        <canvas id="formatChart"></canvas>
-        {% else %}
-        <span class="text-muted" style="font-size:.85rem;">데이터 없음</span>
-        {% endif %}
+        {% if format_counts %}<canvas id="formatChart"></canvas>
+        {% else %}<span class="text-muted" style="font-size:.85rem;">데이터 없음</span>{% endif %}
       </div>
     </div>
   </div>
 </div>
+
+{% else %}
+<!-- ② 이전연도: 월별 매출추이 + 부서별 매출 현황 -->
+<div class="row g-3 mb-4">
+  <div class="col-md-8">
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <span class="title"><iconify-icon icon="mdi:chart-line" width="16" style="color:#1a56db;"></iconify-icon> 월별 매출추이</span>
+        <span class="total-badge">연간 합계 ₩{{ "{:,}".format(total_monthly) }}</span>
+      </div>
+      <div class="dash-card-body" style="position:relative; height:220px;"><canvas id="monthlyChart"></canvas></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <span class="title"><iconify-icon icon="mdi:office-building-outline" width="16" style="color:#0891b2;"></iconify-icon> 부서별 매출 현황</span>
+        {% if total_dept > 0 %}<span class="total-badge">합계 ₩{{ "{:,}".format(total_dept) }}</span>{% endif %}
+      </div>
+      <div class="dash-card-body" style="position:relative; height:220px;">
+        {% if dept_revenue %}<canvas id="deptChart"></canvas>
+        {% else %}<div class="d-flex align-items-center justify-content-center h-100"><span class="text-muted" style="font-size:.85rem;">청구 데이터 없음</span></div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 이전연도: 부서별 월별 비교 + 촬영형식 분포 -->
+{% if dept_monthly %}
+<div class="row g-3 mb-4">
+  <div class="col-md-8">
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <span class="title"><iconify-icon icon="mdi:chart-bar-stacked" width="16" style="color:#059669;"></iconify-icon> 부서별 월별 매출 비교</span>
+      </div>
+      <div class="dash-card-body" style="position:relative; height:260px;"><canvas id="deptMonthlyChart"></canvas></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <span class="title"><iconify-icon icon="mdi:chart-donut-variant" width="16" style="color:#7c3aed;"></iconify-icon> 촬영형식 분포</span>
+        <span class="total-badge">{{ total }}차시</span>
+      </div>
+      <div class="dash-card-body d-flex align-items-center justify-content-center" style="height:260px;">
+        {% if format_counts %}<canvas id="formatChart"></canvas>
+        {% else %}<span class="text-muted" style="font-size:.85rem;">데이터 없음</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
 
 <!-- ⑤ 부서별 현황 테이블 -->
 <div class="row g-3">
@@ -235,9 +235,9 @@
         <thead>
           <tr>
             <th style="padding-left:18px;">담당부서</th>
-            <th class="text-center">전체</th>
-            <th class="text-center">촬영</th>
-            <th class="text-center">오픈</th>
+            <th class="text-center">전체<small class="text-muted fw-normal">차시</small></th>
+            <th class="text-center">촬영<small class="text-muted fw-normal">차시</small></th>
+            <th class="text-center">오픈<small class="text-muted fw-normal">차시</small></th>
             <th class="text-center">청구율</th>
             <th style="min-width:90px;">오픈 진행률</th>
           </tr>
@@ -376,6 +376,9 @@ const PALETTE = ['#1a56db','#0891b2','#059669','#d97706','#7c3aed','#db2777','#0
 
 // ── 부서별 월별 비교 (그룹 막대) ──
 (function(){
+
+// ── 부서별 월별 비교 (그룹 막대) ──
+(function(){
   const ctx = document.getElementById('deptMonthlyChart');
   if (!ctx) return;
   const deptMonthly = {{ dept_monthly | tojson }};
@@ -386,8 +389,7 @@ const PALETTE = ['#1a56db','#0891b2','#059669','#d97706','#7c3aed','#db2777','#0
     data: months.map(m => deptMonthly[dept][m] || 0),
     backgroundColor: PALETTE[i % PALETTE.length] + '99',
     borderColor: PALETTE[i % PALETTE.length],
-    borderWidth: 1.5,
-    borderRadius: 3
+    borderWidth: 1.5, borderRadius: 3
   }));
   new Chart(ctx, {
     type: 'bar',
@@ -399,10 +401,7 @@ const PALETTE = ['#1a56db','#0891b2','#059669','#d97706','#7c3aed','#db2777','#0
         tooltip: { callbacks: { label: c => c.dataset.label + ': ₩' + c.raw.toLocaleString() } }
       },
       scales: {
-        y: {
-          ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(0)+'M' : v.toLocaleString() },
-          grid: { color: '#f5f5f5' }
-        },
+        y: { ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(0)+'M' : v.toLocaleString() }, grid: { color: '#f5f5f5' } },
         x: { grid: { display: false } }
       }
     }

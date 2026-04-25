@@ -153,26 +153,47 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
     from collections import Counter
     require_login(request)
     today = date.today()
-    base = db.query(Content).filter_by(year=year)
-    total  = base.count()
-    shot   = base.filter(Content.shooting_date != None).count()
-    opened = base.filter(Content.open_date != None).count()
-    billed = base.filter(Content.billing_month != None, Content.billing_month != "").count()
 
-    # ── 부서별 현황 ──────────────────────────────────
+    def sess_sum(q):
+        """session_count 합계 (NULL → 0)"""
+        return db.query(func.coalesce(func.sum(Content.session_count), 0))\
+                 .filter(Content.id.in_([c.id for c in q])).scalar()
+
+    base_q = db.query(Content).filter_by(year=year)
+    all_ids     = [c.id for c in base_q.all()]
+    shot_ids    = [c.id for c in base_q.filter(Content.shooting_date != None).all()]
+    opened_ids  = [c.id for c in base_q.filter(Content.open_date != None).all()]
+    billed_ids  = [c.id for c in base_q.filter(Content.billing_month != None, Content.billing_month != "").all()]
+
+    def id_sum(ids):
+        if not ids: return 0
+        return db.query(func.coalesce(func.sum(Content.session_count), 0))\
+                 .filter(Content.id.in_(ids)).scalar() or 0
+
+    total  = id_sum(all_ids)
+    shot   = id_sum(shot_ids)
+    opened = id_sum(opened_ids)
+    billed = id_sum(billed_ids)
+
+    # ── 부서별 현황 (차시수 기준) ──────────────────────
     depts_raw = db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().all()
     dept_list = [d[0] for d in depts_raw]
     dept_summary = []
     for dept in dept_list:
-        q = db.query(Content).filter_by(year=year, department=dept)
-        total_d = q.count()
-        billed_d = q.filter(Content.billing_month != None, Content.billing_month != "").count()
+        dq = db.query(Content).filter_by(year=year, department=dept)
+        def dsum(q2):
+            ids2 = [c.id for c in q2.all()]
+            return id_sum(ids2)
+        total_d  = dsum(dq)
+        shot_d   = dsum(dq.filter(Content.shooting_date != None))
+        opened_d = dsum(dq.filter(Content.open_date != None))
+        billed_d = dsum(dq.filter(Content.billing_month != None, Content.billing_month != ""))
         dept_summary.append({
             "department": dept,
-            "total": total_d,
-            "shot": q.filter(Content.shooting_date != None).count(),
-            "opened": q.filter(Content.open_date != None).count(),
-            "billed": billed_d,
+            "total":      total_d,
+            "shot":       shot_d,
+            "opened":     opened_d,
+            "billed":     billed_d,
             "billed_pct": round(billed_d / total_d * 100) if total_d > 0 else 0,
         })
     dept_summary.sort(key=lambda x: x["total"], reverse=True)
