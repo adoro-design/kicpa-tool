@@ -27,7 +27,7 @@
 {% block content %}
 <!-- 연도 선택 -->
 <div class="d-flex gap-2 mb-4">
-  {% for y in [2025,2026,2027] %}
+  {% for y in [2023,2024,2025,2026] %}
   <a href="/?year={{ y }}" class="btn btn-sm {% if y == year %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ y }}년</a>
   {% endfor %}
 </div>

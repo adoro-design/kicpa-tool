@@ -418,7 +418,8 @@ def import_page(request: Request):
 async def import_gsheet(request: Request, year: int = Form(2026),
                         import_mode: str = Form("append"), db: Session = Depends(get_db)):
     require_login(request)
-    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
+    spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
+    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and spreadsheet_id)
     def fail(msg):
         return templates.TemplateResponse("import.html", {
             "request": request, "user": get_user(request),
@@ -440,9 +441,10 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             "token_uri": "https://oauth2.googleapis.com/token",
         }, scopes=SCOPES)
         gc = gspread.authorize(creds)
-        spreadsheet = gc.open_by_key(os.getenv("GOOGLE_SPREADSHEET_ID"))
-        ws = spreadsheet.worksheet("개발관리")
-        rows = ws.get_all_values()  # 전체 행 가져오기 (인덱스 0부터)
+        spreadsheet = gc.open_by_key(spreadsheet_id)
+        sheet_name = f"개발관리_{year}"  # 탭명: 개발관리_2026, 개발관리_2025 ...
+        ws = spreadsheet.worksheet(sheet_name)
+        rows = ws.get_all_values()
 
     except Exception as e:
         return fail(f"구글 시트 연결 실패: {e}")
