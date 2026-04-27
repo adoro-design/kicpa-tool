@@ -506,14 +506,31 @@ async def import_gsheet(request: Request, year: int = Form(2026),
 
         def to_date_str(v):
             if not v: return None
-            v = str(v).strip()
+            v = str(v).strip().rstrip(".")
             if not v: return None
+            # ISO 형식 우선 시도
             try: return date.fromisoformat(v[:10])
             except: pass
+            # 표준 형식들
             try:
-                for fmt in ("%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d", "%Y-%m-%d"):
+                for fmt in ("%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d", "%Y-%m-%d",
+                            "%Y. %m. %d", "%Y. %m. %d."):
                     try: return datetime.datetime.strptime(v, fmt).date()
                     except: pass
+            except: pass
+            # 구글 시트 한국식: "2026. 1. 15" 또는 "2026. 01. 15" (공백 불규칙)
+            try:
+                import re as _re
+                m = _re.search(r'(\d{4})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{1,2})', v)
+                if m:
+                    return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except: pass
+            # 한국어 날짜: "2026년 1월 15일"
+            try:
+                import re as _re
+                m = _re.search(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', v)
+                if m:
+                    return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             except: pass
             return None
 
