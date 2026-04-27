@@ -505,10 +505,11 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             db.query(Content).filter_by(year=year).delete()
             db.commit()
 
-        def to_date_str(v):
+        def to_date_str(v, yr=year):
             if not v: return None
             v = str(v).strip().rstrip(".")
             if not v: return None
+            import re as _re
             # ISO 형식 우선 시도
             try: return date.fromisoformat(v[:10])
             except: pass
@@ -519,20 +520,21 @@ async def import_gsheet(request: Request, year: int = Form(2026),
                     try: return datetime.datetime.strptime(v, fmt).date()
                     except: pass
             except: pass
-            # 구글 시트 한국식: "2026. 1. 15" 또는 "2026. 01. 15" (공백 불규칙)
-            try:
-                import re as _re
-                m = _re.search(r'(\d{4})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{1,2})', v)
-                if m:
-                    return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            except: pass
-            # 한국어 날짜: "2026년 1월 15일"
-            try:
-                import re as _re
-                m = _re.search(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', v)
-                if m:
-                    return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            except: pass
+            # 구글 시트 한국식 (연도 포함): "2026. 1. 15"
+            m = _re.search(r'(\d{4})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{1,2})', v)
+            if m:
+                try: return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                except: pass
+            # 연도 포함 한국어: "2026년 1월 15일"
+            m = _re.search(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', v)
+            if m:
+                try: return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                except: pass
+            # ★ 구글 시트 연도 없는 한국식: "01월 05일" → yr년으로 보완
+            m = _re.search(r'^(\d{1,2})월\s*(\d{1,2})일$', v)
+            if m:
+                try: return date(yr, int(m.group(1)), int(m.group(2)))
+                except: pass
             return None
 
         def to_int_gs(v):
