@@ -348,8 +348,10 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
     ws.cell(tr, 6,  f"=SUM(F{tds}:F{er})")
     ws.cell(tr, 7,  f"=SUM(G{tds}:G{er})")
     ws.cell(tr, 11, f"=SUM(K{tds}:K{er})")
-    ws.cell(tr, 13, f"=SUM(M{tds}:M{er})").number_format = '#,##0'
-    ws.cell(tr, 14, f"=SUM(N{tds}:N{er})").number_format = '#,##0'
+    for tc, tf in [(13, f"=SUM(M{tds}:M{er})"), (14, f"=SUM(N{tds}:N{er})")]:
+        c_cell = ws.cell(tr, tc, tf)
+        c_cell.number_format = '#,##0'
+        c_cell.alignment = Alignment(horizontal='right', vertical='center')
 
     course_seq = 0
     for ri, (is_travel, c, ta) in enumerate(rows_data):
@@ -391,7 +393,9 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                 if s.get('border'):    cell.border    = copy(s['border'])
                 if s.get('alignment'): cell.alignment = copy(s['alignment'])
                 if col == 8 and isinstance(val, date): cell.number_format = 'YYYY-MM-DD'
-                if col in (12, 13, 14): cell.number_format = '#,##0'
+                if col in (12, 13, 14):
+                    cell.number_format = '#,##0'
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
             except AttributeError:
                 pass  # MergedCell 무시
 
