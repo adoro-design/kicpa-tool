@@ -347,6 +347,7 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
     ws.merge_cells(f"A{tr}:E{tr}")
     ws.cell(tr, 6,  f"=SUM(F{tds}:F{er})")
     ws.cell(tr, 7,  f"=SUM(G{tds}:G{er})")
+    ws.cell(tr, 11, f"=SUM(K{tds}:K{er})")
     ws.cell(tr, 13, f"=SUM(M{tds}:M{er})").number_format = '#,##0'
     ws.cell(tr, 14, f"=SUM(N{tds}:N{er})").number_format = '#,##0'
 
@@ -363,8 +364,8 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                     3:c.course_name, 4:c.instructor, 5:"",
                     6:c.session_count or "", 7:c.chapter_count or "",
                     8:c.open_date, 9:c.shooting_format or "",
-                    10:c.shooting_format or "", 11:"", 12:up,
-                    13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
+                    10:c.shooting_format or "", 11:c.quiz_count or "",
+                    12:up, 13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
         else:
             th      = c.travel_hours or 1
             td      = getattr(c, 'travel_days', None)
