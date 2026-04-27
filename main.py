@@ -489,6 +489,7 @@ async def import_gsheet(request: Request, year: int = Form(2026),
 
     try:
         import datetime
+        date_parse_errors = []   # 날짜 파싱 실패 진단용
         # replace 모드: 수동 데이터 보존 후 삭제
         manual_data = {}
         if import_mode == "replace":
@@ -583,12 +584,33 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             c.instructor        = cell(9, 200) or None
             c.department        = cell(10, 100) or None
             c.kicpa_manager     = cell(11, 100) or None
-            c.shooting_date     = to_date_str(cell(13))
+            c.filming_consent   = cell(12, 100) or None
             c.shooting_time     = cell(14, 100) or None
             c.shooting_format   = cell(15, 100) or None
             c.location          = cell(16, 200) or None
-            c.open_date         = to_date_str(cell(23))
+            c.has_quiz          = cell(17, 50)  or None
+            c.quiz_count        = to_int_gs(cell(18))
+            c.materials_supply  = cell(19, 100) or None
+            c.video_marking     = cell(20, 100) or None
+            c.dev_outsource_date = to_date_str(cell(21))
+            c.inspection_date   = to_date_str(cell(22))
             c.billing           = cell(24, 100) or None
+
+            # 날짜 필드: 파싱된 값이 있으면 업데이트, 없으면 기존 값 유지 (append 모드 덮어쓰기 방지)
+            new_shoot = to_date_str(cell(13))
+            new_open  = to_date_str(cell(23))
+            if new_shoot is not None or existing is None:
+                c.shooting_date = new_shoot
+            if new_open is not None or existing is None:
+                c.open_date = new_open
+
+            # 진단용: 파싱 실패한 날짜 원본값 수집 (최초 5건)
+            if len(date_parse_errors) < 5:
+                raw13 = cell(13); raw23 = cell(23)
+                if raw13 and new_shoot is None:
+                    date_parse_errors.append(f"촬영날짜 파싱실패: [{raw13}]")
+                if raw23 and new_open is None:
+                    date_parse_errors.append(f"오픈날짜 파싱실패: [{raw23}]")
             # Z열 청구월 — "3월", "3", "03", "3월 청구" 등 다양한 형식 정규화
             raw_bm = cell(25, 20)
             if raw_bm:
@@ -612,10 +634,12 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             imported += 1
 
         db.commit()
+        msg = f"구글 시트에서 {imported}건 동기화 완료 ({year}년, {import_mode} 모드)"
+        if date_parse_errors:
+            msg += " ⚠️ 날짜 파싱 실패 샘플: " + " / ".join(date_parse_errors)
         return templates.TemplateResponse("import.html", {
             "request": request, "user": get_user(request),
-            "msg": f"구글 시트에서 {imported}건 동기화 완료 ({year}년, {import_mode} 모드)",
-            "msg_type": "success", "gsheet_ok": gsheet_ok
+            "msg": msg, "msg_type": "success", "gsheet_ok": gsheet_ok
         })
     except Exception as e:
         db.rollback()
