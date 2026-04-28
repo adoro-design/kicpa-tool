@@ -396,7 +396,7 @@ def schedule(request: Request, year: int = 2026, month: str = "", dept: str = ""
 @app.get("/export")
 def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
            billing: str = "", search: str = "", db: Session = Depends(get_db)):
-    require_login(request)
+    require_admin(request)
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -444,7 +444,7 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
 # ── Excel 가져오기 ─────────────────────────────────
 @app.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
-    require_login(request)
+    require_admin(request)
     gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
     return templates.TemplateResponse("import.html", {
         "request": request, "user": get_user(request),
@@ -455,7 +455,7 @@ def import_page(request: Request):
 @app.post("/import/gsheet")
 async def import_gsheet(request: Request, year: int = Form(2026),
                         import_mode: str = Form("append"), db: Session = Depends(get_db)):
-    require_login(request)
+    require_admin(request)
     spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
     gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and spreadsheet_id)
     def fail(msg):
@@ -656,7 +656,7 @@ def _to_int(val):
 @app.post("/import")
 async def import_excel(request: Request, year: int = Form(2026), import_mode: str = Form("append"),
                        excel_file: UploadFile = File(...), db: Session = Depends(get_db)):
-    require_login(request)
+    require_admin(request)
     import openpyxl
     from openpyxl.utils.datetime import from_excel
 
@@ -762,10 +762,10 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
 
     return templates.TemplateResponse("import.html", {"request": request, "user": get_user(request), "msg": msg, "msg_type": msg_type})
 
-# ── 정산 관리 (관리자) ────────────────────────────
+# ── 정산 관리 ────────────────────────────
 @app.get("/billing", response_class=HTMLResponse)
 def billing_page(request: Request, year: int = 2026, month: str = "", dept: str = "", db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     q = db.query(Content).filter_by(year=year)
     if month: q = q.filter_by(billing_month=month)
     if dept:  q = q.filter_by(department=dept)
@@ -1041,7 +1041,7 @@ def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
 # ── 스튜디오 대관료 관리 ──────────────────────────
 @app.get("/studio", response_class=HTMLResponse)
 def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     q = db.query(StudioRental).filter_by(year=year)
     if month: q = q.filter_by(month=month)
     rentals = q.order_by(StudioRental.usage_date).all()
@@ -1066,7 +1066,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
     usage_date: str = Form(""), hours: str = Form(""),
     unit_price: str = Form("45000"), notes: str = Form(""),
     db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     try:
         ud = date.fromisoformat(usage_date) if usage_date else None
         m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
@@ -1081,18 +1081,18 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
 @app.post("/studio/delete/{rid}")
 def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
     db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     r = db.query(StudioRental).filter_by(id=rid).first()
     m = r.month if r else month
     db.query(StudioRental).filter_by(id=rid).delete()
     db.commit()
     return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
 
-# ── 문서 생성 (관리자) ────────────────────────────
+# ── 문서 생성 ────────────────────────────
 @app.get("/documents", response_class=HTMLResponse)
 def documents_page(request: Request, year: int = 2026, dept: str = "", month: str = "",
                    db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     depts = [d[0] for d in db.query(Content.department).filter_by(year=year)
              .filter(Content.department != None).distinct().order_by(Content.department).all()]
     billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year)
@@ -1113,7 +1113,7 @@ def documents_generate(request: Request, year: int = Form(2026),
                        dept: str = Form(""), month: str = Form(""),
                        db: Session = Depends(get_db)):
     import traceback
-    require_admin(request)
+    require_login(request)
     if not dept or not month:
         return RedirectResponse(f"/documents?year={year}", 302)
 
@@ -1220,7 +1220,7 @@ def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
 # ── 스튜디오 대관료 관리 ──────────────────────────
 @app.get("/studio", response_class=HTMLResponse)
 def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     q = db.query(StudioRental).filter_by(year=year)
     if month: q = q.filter_by(month=month)
     rentals = q.order_by(StudioRental.usage_date).all()
@@ -1245,7 +1245,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
     usage_date: str = Form(""), hours: str = Form(""),
     unit_price: str = Form("45000"), notes: str = Form(""),
     db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     try:
         ud = date.fromisoformat(usage_date) if usage_date else None
         m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
@@ -1260,18 +1260,18 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
 @app.post("/studio/delete/{rid}")
 def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
     db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     r = db.query(StudioRental).filter_by(id=rid).first()
     m = r.month if r else month
     db.query(StudioRental).filter_by(id=rid).delete()
     db.commit()
     return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
 
-# ── 문서 생성 (관리자) ────────────────────────────
+# ── 문서 생성 ────────────────────────────
 @app.get("/documents", response_class=HTMLResponse)
 def documents_page(request: Request, year: int = 2026, dept: str = "", month: str = "",
                    db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     depts = [d[0] for d in db.query(Content.department).filter_by(year=year)
              .filter(Content.department != None).distinct().order_by(Content.department).all()]
     billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year)
@@ -1293,7 +1293,7 @@ def documents_generate(request: Request, year: int = Form(2026),
                        dept: str = Form(""), month: str = Form(""),
                        db: Session = Depends(get_db)):
     import traceback
-    require_admin(request)
+    require_login(request)
     if not dept or not month:
         return RedirectResponse(f"/documents?year={year}", 302)
 
