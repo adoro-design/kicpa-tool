@@ -84,6 +84,7 @@
   </div>
 
   <!-- 생성 버튼 -->
+  {% if user and user.role != 'viewer' %}
   <form method="post" action="/documents/generate">
     <input type="hidden" name="year"  value="{{ year }}">
     <input type="hidden" name="dept"  value="{{ dept }}">
@@ -99,6 +100,11 @@
       </div>
     </div>
   </form>
+  {% else %}
+  <div class="alert alert-secondary py-2" style="font-size:.85rem;">
+    <i class="bi-eye me-1"></i>읽기 전용 계정은 문서를 생성할 수 없습니다.
+  </div>
+  {% endif %}
 
   {% else %}
   <div class="text-center py-4 text-muted">선택한 조건의 과정 데이터가 없습니다.</div>

@@ -296,9 +296,12 @@ PM 투입비율: 1% 고정. PROD 투입비율: 표준시간 기반 자동 계산
 | role | 접근 권한 |
 |------|-----------|
 | admin | 전체 메뉴 (Excel 가져오기·내보내기·설정·사용자 관리 포함) |
-| director | 대시보드·콘텐츠 목록·촬영일정·정산관리·문서생성·스튜디오 대관 |
+| director | 대시보드·콘텐츠 목록·촬영일정·정산관리·문서생성·스튜디오 대관 (등록·수정·삭제 가능) |
+| viewer | director와 동일 메뉴 조회만 가능 — 등록·수정·삭제·문서생성 불가 (읽기 전용) |
 
 **Admin 전용**: Excel 가져오기/내보내기, 고객담당자, 단가표 관리, 손익분석서 설정, 사용자 관리
+
+**권한 함수**: `require_admin` (admin only) / `require_editor` (admin+director) / `require_login` (전체)
 
 세션 쿠키 기반 인증 (`itsdangerous.TimestampSigner`).
 

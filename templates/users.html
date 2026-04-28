@@ -35,8 +35,10 @@
             <td>
               {% if u.role == 'admin' %}
               <span class="badge bg-primary">관리자</span>
-              {% else %}
+              {% elif u.role == 'director' %}
               <span class="badge bg-secondary">촬영감독</span>
+              {% else %}
+              <span class="badge bg-light text-dark" style="border:1px solid #ccc;">뷰어</span>
               {% endif %}
             </td>
             <td>
@@ -117,6 +119,7 @@
           <label class="form-label">역할</label>
           <select name="role" class="form-select">
             <option value="director">촬영감독</option>
+            <option value="viewer">뷰어 (읽기 전용)</option>
             <option value="admin">관리자</option>
           </select>
         </div>
@@ -130,11 +133,15 @@
         <h6 style="font-size:.85rem; font-weight:700; margin-bottom:10px;">권한 안내</h6>
         <div class="mb-2">
           <span class="badge bg-primary me-1">관리자</span>
-          <span class="text-muted">모든 기능 접근 가능</span>
+          <span class="text-muted">모든 기능 접근 (설정·가져오기 포함)</span>
+        </div>
+        <div class="mb-2">
+          <span class="badge bg-secondary me-1">촬영감독</span>
+          <span class="text-muted">정산·문서·스튜디오 포함 등록/수정 가능</span>
         </div>
         <div>
-          <span class="badge bg-secondary me-1">촬영감독</span>
-          <span class="text-muted">콘텐츠 목록, 촬영 일정, Excel 기능만 접근</span>
+          <span class="badge bg-light text-dark me-1" style="border:1px solid #ccc;">뷰어</span>
+          <span class="text-muted">조회 전용 — 등록·수정·삭제·문서생성 불가</span>
         </div>
       </div>
     </div>

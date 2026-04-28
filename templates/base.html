@@ -43,7 +43,7 @@
     </ul>
     <div class="sidebar-footer">
       <i class="bi-person-circle"></i> {{ user.name if user else '' }}
-      {% if user and user.role == 'admin' %}<span class="badge bg-primary ms-1">관리자</span>{% else %}<span class="badge bg-secondary ms-1">촬영감독</span>{% endif %}
+      {% if user and user.role == 'admin' %}<span class="badge bg-primary ms-1">관리자</span>{% elif user and user.role == 'director' %}<span class="badge bg-secondary ms-1">촬영감독</span>{% else %}<span class="badge bg-light text-dark ms-1" style="border:1px solid #ccc;">뷰어</span>{% endif %}
       <br><a href="/logout" class="text-danger text-decoration-none mt-1 d-inline-block"><i class="bi-box-arrow-right"></i> 로그아웃</a>
     </div>
   </nav>

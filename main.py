@@ -39,6 +39,11 @@ MONTH_ORDER = {m: i for i, m in enumerate(MONTHS)}
 def get_user(request: Request): return request.session.get("user")
 def require_login(request: Request):
     if not get_user(request): raise HTTPException(status_code=302, headers={"Location": "/login"})
+def require_editor(request: Request):
+    """admin 또는 director만 허용 — viewer는 읽기 전용이므로 쓰기 차단"""
+    u = get_user(request)
+    if not u: raise HTTPException(status_code=302, headers={"Location": "/login"})
+    if u["role"] not in ("admin", "director"): raise HTTPException(status_code=403, detail="읽기 전용 계정입니다.")
 def require_admin(request: Request):
     u = get_user(request)
     if not u or u["role"] != "admin": raise HTTPException(status_code=403, detail="권한 없음")
@@ -333,7 +338,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""),
     travel_hours: str=Form(""), travel_days: str=Form(""), travel_expense: str=Form(""),
     notes: str=Form(""), db: Session = Depends(get_db)):
-    require_login(request)
+    require_editor(request)
 
     def to_date(s):
         try: return date.fromisoformat(s) if s else None
@@ -1066,7 +1071,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
     usage_date: str = Form(""), hours: str = Form(""),
     unit_price: str = Form("45000"), notes: str = Form(""),
     db: Session = Depends(get_db)):
-    require_login(request)
+    require_editor(request)
     try:
         ud = date.fromisoformat(usage_date) if usage_date else None
         m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
@@ -1081,7 +1086,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
 @app.post("/studio/delete/{rid}")
 def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
     db: Session = Depends(get_db)):
-    require_login(request)
+    require_editor(request)
     r = db.query(StudioRental).filter_by(id=rid).first()
     m = r.month if r else month
     db.query(StudioRental).filter_by(id=rid).delete()
@@ -1113,7 +1118,7 @@ def documents_generate(request: Request, year: int = Form(2026),
                        dept: str = Form(""), month: str = Form(""),
                        db: Session = Depends(get_db)):
     import traceback
-    require_login(request)
+    require_editor(request)
     if not dept or not month:
         return RedirectResponse(f"/documents?year={year}", 302)
 
@@ -1245,7 +1250,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
     usage_date: str = Form(""), hours: str = Form(""),
     unit_price: str = Form("45000"), notes: str = Form(""),
     db: Session = Depends(get_db)):
-    require_login(request)
+    require_editor(request)
     try:
         ud = date.fromisoformat(usage_date) if usage_date else None
         m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
@@ -1260,7 +1265,7 @@ def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
 @app.post("/studio/delete/{rid}")
 def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
     db: Session = Depends(get_db)):
-    require_login(request)
+    require_editor(request)
     r = db.query(StudioRental).filter_by(id=rid).first()
     m = r.month if r else month
     db.query(StudioRental).filter_by(id=rid).delete()
@@ -1293,7 +1298,7 @@ def documents_generate(request: Request, year: int = Form(2026),
                        dept: str = Form(""), month: str = Form(""),
                        db: Session = Depends(get_db)):
     import traceback
-    require_login(request)
+    require_editor(request)
     if not dept or not month:
         return RedirectResponse(f"/documents?year={year}", 302)
 
