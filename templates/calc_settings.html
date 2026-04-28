@@ -23,6 +23,13 @@
   </div>
 </div>
 
+{% if user and user.role == 'viewer' %}
+<div class="alert alert-secondary py-2 mb-3" style="font-size:.85rem;">
+  <i class="bi-eye me-1"></i>읽기 전용 계정입니다. 설정 추가·삭제는 불가합니다.
+</div>
+{% endif %}
+
+{% if user and user.role != 'viewer' %}
 <!-- 새 설정 추가 -->
 <div class="form-section mb-4">
   <div class="form-section-title">새 설정값 추가 (변경 적용일 입력)</div>
@@ -57,6 +64,7 @@
     </div>
   </form>
 </div>
+{% endif %}
 
 <!-- 이력 목록 -->
 <div class="table-card">
@@ -72,7 +80,7 @@
         <th>적용 시작일</th>
         <th>비고</th>
         <th>등록일</th>
-        <th style="width:60px;"></th>
+        {% if user and user.role != 'viewer' %}<th style="width:60px;"></th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -89,6 +97,7 @@
         </td>
         <td style="font-size:.83rem;">{{ r.label or '-' }}</td>
         <td style="font-size:.8rem;">{{ r.created_at.strftime('%Y.%m.%d') if r.created_at else '-' }}</td>
+        {% if user and user.role != 'viewer' %}
         <td>
           <form method="post" action="/calc_settings/delete/{{ r.id }}"
             onsubmit="return confirm('삭제하시겠습니까?')">
@@ -96,9 +105,10 @@
               style="font-size:.74rem; padding:2px 8px;">삭제</button>
           </form>
         </td>
+        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="6" class="text-center py-4 text-muted">설정 이력이 없습니다.</td></tr>
+      <tr><td colspan="{% if user and user.role != 'viewer' %}6{% else %}5{% endif %}" class="text-center py-4 text-muted">설정 이력이 없습니다.</td></tr>
       {% endfor %}
     </tbody>
   </table>

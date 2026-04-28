@@ -37,6 +37,12 @@
   </div>
 </div>
 
+{% if user and user.role == 'viewer' %}
+<div class="alert alert-secondary py-2 mb-3" style="font-size:.85rem;">
+  <i class="bi-eye me-1"></i>읽기 전용 계정입니다. 단가 수정·추가·삭제는 불가합니다.
+</div>
+{% endif %}
+
 <!-- 단가 수정 폼 -->
 <form method="post" action="/price_table/update" id="priceForm">
 <div class="row g-4">
@@ -69,12 +75,14 @@
                  {% if p.is_active %}checked{% endif %}>
           <label class="form-check-label" for="a{{ p.id }}" style="font-size:.75rem;">사용</label>
         </div>
+        {% if user and user.role != 'viewer' %}
         <form method="post" action="/price_table/delete/{{ p.id }}" style="margin:0;"
               onsubmit="return confirm('삭제하시겠습니까?')">
           <button type="submit" class="btn btn-outline-danger btn-sm" style="font-size:.72rem; padding:2px 6px;">
             <i class="bi-trash"></i>
           </button>
         </form>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
@@ -114,10 +122,13 @@
 
 </div>
 <div class="d-flex justify-content-end mt-2">
+  {% if user and user.role != 'viewer' %}
   <button type="submit" class="btn btn-primary"><i class="bi-save me-1"></i>단가표 저장</button>
+  {% endif %}
 </div>
 </form>
 
+{% if user and user.role != 'viewer' %}
 <!-- 신규 항목 추가 -->
 <div class="form-section mt-4">
   <div class="form-section-title">새 항목 추가</div>
@@ -161,4 +172,5 @@
     </div>
   </form>
 </div>
+{% endif %}
 {% endblock %}

@@ -10,7 +10,7 @@ from datetime import date
 import os, io, re
 from dotenv import load_dotenv
 
-from database import get_db, init_db, User, Content, PriceTable, Document, StudioRental, CustomerContact, CalcSettings
+from database import get_db, init_db, SessionLocal, User, Content, PriceTable, Document, StudioRental, CustomerContact, CalcSettings
 import docgen
 import calendar as _calendar
 
@@ -38,7 +38,17 @@ MONTH_ORDER = {m: i for i, m in enumerate(MONTHS)}
 # ── 헬퍼 ────────────────────────────────────────
 def get_user(request: Request): return request.session.get("user")
 def require_login(request: Request):
-    if not get_user(request): raise HTTPException(status_code=302, headers={"Location": "/login"})
+    u = get_user(request)
+    if not u: raise HTTPException(status_code=302, headers={"Location": "/login"})
+    # 비활성화된 계정은 즉시 세션 만료
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter_by(id=u["id"], is_active=True).first()
+        if not db_user:
+            request.session.clear()
+            raise HTTPException(status_code=302, headers={"Location": "/login"})
+    finally:
+        db.close()
 def require_editor(request: Request):
     """admin 또는 director만 허용 — viewer는 읽기 전용이므로 쓰기 차단"""
     u = get_user(request)
@@ -168,7 +178,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
     all_ids     = [c.id for c in base_q.all()]
     shot_ids    = [c.id for c in base_q.filter(Content.shooting_date != None).all()]
     opened_ids  = [c.id for c in base_q.filter(Content.open_date != None).all()]
-    billed_ids  = [c.id for c in base_q.filter(Content.billing_month != None, Content.billing_month != "").all()]
+    billed_ids  = [c.id for c in base_q.filter(Content.billing != None, Content.billing != "").all()]
 
     def id_sum(ids):
         if not ids: return 0
@@ -192,7 +202,7 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
         total_d  = dsum(dq)
         shot_d   = dsum(dq.filter(Content.shooting_date != None))
         opened_d = dsum(dq.filter(Content.open_date != None))
-        billed_d = dsum(dq.filter(Content.billing_month != None, Content.billing_month != ""))
+        billed_d = dsum(dq.filter(Content.billing != None, Content.billing != ""))
         dept_summary.append({
             "department": dept,
             "total":      total_d,
@@ -423,7 +433,7 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
     headers = ["No","촬영월","과정명","필수/선택","원코드","카테고리","과정코드",
                "차시수","챕터수","강사","담당부서","한공회담당","촬영동의서",
                "촬영날짜","촬영시간","촬영형식","장소","퀴즈유무","퀴즈문항수","교안수급",
-               "동영상마킹","개발(외주)","검수","오픈일","비용청구","비고"]
+               "동영상마킹","개발(외주)","검수","오픈일","비용청구여부","비고"]
     for i, h in enumerate(headers):
         c = ws.cell(row=2, column=i+1, value=h)
         c.font = Font(bold=True, color="FFFFFF")
@@ -860,10 +870,10 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         "get_travel_expense": get_travel_expense,
     })
 
-# ── 단가표 관리 (관리자) ──────────────────────────
+# ── 단가표 관리 ──────────────────────────
 @app.get("/price_table", response_class=HTMLResponse)
 def price_table_page(request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     prices = db.query(PriceTable).order_by(PriceTable.type_name, PriceTable.effective_from.desc().nullslast(), PriceTable.id).all()
     # 오늘 기준 현재 유효 단가 (요약용)
     today = date.today()
@@ -907,10 +917,10 @@ async def price_table_add(request: Request,
         db.commit()
     return RedirectResponse("/price_table?msg=added", 302)
 
-# ── 계산 설정 관리 (관리자) ──────────────────────────
+# ── 계산 설정 관리 ──────────────────────────
 @app.get("/calc_settings", response_class=HTMLResponse)
 def calc_settings_page(request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     # 설정별 이력 목록
     all_rows = db.query(CalcSettings).order_by(
         CalcSettings.setting_name, CalcSettings.effective_from.desc().nullslast()
@@ -1000,7 +1010,7 @@ def users_change_pw(request: Request, user_id: int=Form(...), new_password: str=
 # ── 고객담당자 관리 ───────────────────────────────
 @app.get("/customers", response_class=HTMLResponse)
 def customers_page(request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     contacts = db.query(CustomerContact).order_by(CustomerContact.department).all()
     depts = [d[0] for d in db.query(Content.department).filter(Content.department != None).distinct().order_by(Content.department).all()]
     return templates.TemplateResponse("customers.html", {
@@ -1179,7 +1189,7 @@ def documents_generate(request: Request, year: int = Form(2026),
 # ── 고객담당자 관리 ───────────────────────────────
 @app.get("/customers", response_class=HTMLResponse)
 def customers_page(request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+    require_login(request)
     contacts = db.query(CustomerContact).order_by(CustomerContact.department).all()
     depts = [d[0] for d in db.query(Content.department).filter(Content.department != None).distinct().order_by(Content.department).all()]
     return templates.TemplateResponse("customers.html", {

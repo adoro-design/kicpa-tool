@@ -3,6 +3,11 @@
 {% block page_title %}고객담당자 관리{% endblock %}
 
 {% block content %}
+{% if user and user.role == 'viewer' %}
+<div class="alert alert-secondary py-2 mb-3" style="font-size:.85rem;">
+  <i class="bi-eye me-1"></i>읽기 전용 계정입니다. 담당자 추가·수정·삭제는 불가합니다.
+</div>
+{% else %}
 <!-- 담당자 추가 폼 -->
 <div class="form-section mb-4">
   <div class="form-section-title">담당자 추가</div>
@@ -38,6 +43,7 @@
     </div>
   </form>
 </div>
+{% endif %}
 
 <!-- 담당자 목록 -->
 <div class="table-card">
@@ -53,7 +59,7 @@
         <th>전화번호</th>
         <th>이메일</th>
         <th>비고</th>
-        <th style="width:100px;">관리</th>
+        {% if user and user.role != 'viewer' %}<th style="width:100px;">관리</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -64,6 +70,7 @@
         <td style="font-size:.84rem;">{{ c.phone or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.email or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.note or '-' }}</td>
+        {% if user and user.role != 'viewer' %}
         <td>
           <div style="display:flex; gap:4px; white-space:nowrap;">
             <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;"
@@ -74,14 +81,16 @@
             </form>
           </div>
         </td>
+        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="6" class="text-center py-4 text-muted">등록된 담당자가 없습니다.</td></tr>
+      <tr><td colspan="{% if user and user.role != 'viewer' %}6{% else %}5{% endif %}" class="text-center py-4 text-muted">등록된 담당자가 없습니다.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
+{% if user and user.role != 'viewer' %}
 <!-- 수정 모달 -->
 <div class="modal fade" id="editModal" tabindex="-1">
   <div class="modal-dialog">
@@ -121,6 +130,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {% block scripts %}
 <script>
