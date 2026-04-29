@@ -19,7 +19,6 @@
   {% endfor %}
 </div>
 
-{% if user and user.role != 'viewer' %}
 <!-- 필터 + 추가 폼 -->
 <div class="form-section mb-3">
   <div class="form-section-title">사용 내역 추가</div>
@@ -51,12 +50,11 @@
       </div>
       <div class="col-md-1">
         <label class="form-label">&nbsp;</label>
-        <button type="submit" class="btn btn-primary w-100"><i class="bi-plus-lg"></i></button>
+        <button type="submit" class="btn btn-primary w-100 {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor"><i class="bi-plus-lg"></i></button>
       </div>
     </div>
   </form>
 </div>
-{% endif %}
 
 <!-- 월 필터 -->
 <form method="get" action="/studio" class="filter-bar">
@@ -87,7 +85,7 @@
         <th class="text-end">단가</th>
         <th class="text-end">금액</th>
         <th>비고</th>
-        {% if user and user.role != 'viewer' %}<th style="width:60px;"></th>{% endif %}
+        <th style="width:60px;"></th>
       </tr>
     </thead>
     <tbody>
@@ -99,19 +97,17 @@
         <td class="text-end" style="font-size:.84rem;">{{ "{:,}".format(r.unit_price or 45000) }}원</td>
         <td class="text-end" style="font-weight:600;">{{ "{:,}".format((r.hours or 0) * (r.unit_price or 45000)) }}원</td>
         <td style="font-size:.83rem;">{{ r.notes or '-' }}</td>
-        {% if user and user.role != 'viewer' %}
         <td>
           <form method="post" action="/studio/delete/{{ r.id }}"
             onsubmit="return confirm('삭제하시겠습니까?')">
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="month" value="{{ month }}">
-            <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.75rem; padding:2px 8px;">삭제</button>
+            <button type="submit" class="btn btn-xs btn-outline-danger {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor" style="font-size:.75rem; padding:2px 8px;">삭제</button>
           </form>
         </td>
-        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="{% if user and user.role != 'viewer' %}7{% else %}6{% endif %}" class="text-center py-4 text-muted">등록된 내역이 없습니다.</td></tr>
+      <tr><td colspan="7" class="text-center py-4 text-muted">등록된 내역이 없습니다.</td></tr>
       {% endfor %}
     </tbody>
   </table>
