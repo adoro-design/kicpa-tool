@@ -32,8 +32,8 @@
 
       <!-- 설정 -->
       <li class="nav-section">설정</li>
-      {% if user and user.role == 'admin' %}
       <li class="nav-item"><a class="nav-link {% if '/import' in request.url.path %}active{% endif %}" href="/import"><i class="bi-upload"></i> Excel 가져오기</a></li>
+      {% if user and user.role == 'admin' %}
       <li class="nav-item"><a class="nav-link" href="/export"><i class="bi-download"></i> Excel 내보내기</a></li>
       {% endif %}
       <li class="nav-item"><a class="nav-link {% if '/customers' in request.url.path %}active{% endif %}" href="/customers"><i class="bi-person-lines-fill"></i> 고객담당자</a></li>
