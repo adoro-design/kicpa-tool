@@ -58,7 +58,7 @@
             </div>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor">
           <i class="bi-arrow-repeat me-1"></i>구글 시트에서 동기화
         </button>
       </form>
@@ -106,7 +106,7 @@
           <div class="form-text">.xlsx 파일만 지원합니다.</div>
         </div>
         <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn btn-primary {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor">
             <i class="bi-upload me-1"></i>가져오기 실행
           </button>
           <a href="/contents" class="btn btn-outline-secondary">취소</a>

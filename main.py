@@ -459,10 +459,11 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
 # ── Excel 가져오기 ─────────────────────────────────
 @app.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
-    require_admin(request)
+    u = get_user(request)
+    if not u: return RedirectResponse("/login")
     gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
     return templates.TemplateResponse("import.html", {
-        "request": request, "user": get_user(request),
+        "request": request, "user": u,
         "msg": "", "msg_type": "", "gsheet_ok": gsheet_ok
     })
 
