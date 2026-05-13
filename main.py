@@ -452,9 +452,11 @@ def export(request: Request, year: int = 2026, dept: str = "", month: str = "",
 
     buf = io.BytesIO()
     wb.save(buf); buf.seek(0)
+    from urllib.parse import quote
     filename = f"{year}_콘텐츠개발_개발현황.xlsx"
+    encoded = quote(filename)
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+                             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"})
 
 # ── Excel 가져오기 ─────────────────────────────────
 @app.get("/import", response_class=HTMLResponse)
