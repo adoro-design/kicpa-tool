@@ -330,8 +330,14 @@ def content_edit_page(request: Request, id: int = 0,
     # 촬영형식 옵션 = 활성 단가표 항목(출장 시급 제외) → 단가표에 추가하면 자동 노출
     fmt_rows = db.query(PriceTable.type_name).filter(
         PriceTable.is_active == True, PriceTable.category != "travel"
-    ).distinct().order_by(PriceTable.type_name).all()
-    format_options = [r[0] for r in fmt_rows if r[0]]
+    ).distinct().all()
+    # 지정 노출 순서 우선, 목록에 없는 항목은 뒤에 가나다순으로 정렬
+    FMT_ORDER = ["크로마키", "태블릿형", "전자칠판형", "포팅", "편집포팅", "FullVod (출장)", "신규+기존영상편집"]
+    _ord = {name: i for i, name in enumerate(FMT_ORDER)}
+    format_options = sorted(
+        (r[0] for r in fmt_rows if r[0]),
+        key=lambda n: (_ord.get(n, len(FMT_ORDER)), n)
+    )
     # 기존 데이터가 단가표에 없는 값이면 선택 유지되도록 맨 앞에 추가
     if row and row.shooting_format and row.shooting_format not in format_options:
         format_options.insert(0, row.shooting_format)
