@@ -10,7 +10,12 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./kicpa.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL)
+# pool_pre_ping: 연결 사용 직전 살아있는지 ping으로 확인 (죽은 연결 자동 폐기·재생성)
+# pool_recycle: 일정 시간(초) 지난 연결은 강제 갱신 → Render PostgreSQL 유휴 연결 끊김 대응
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL)
+else:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
