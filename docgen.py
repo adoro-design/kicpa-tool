@@ -86,15 +86,16 @@ def classify_fmt(fmt):
 def get_unit_price_for(cr, price_tbl):
     if cr.custom_price: return cr.custom_price
     fmt = cr.shooting_format or ""
+    # 단가 미등록 형식은 0원으로 통일 (정산관리 match_price와 동일) → 누락이 양쪽 화면에서 드러남
     if "포팅" in fmt:
         if "편집" in fmt and "무편집" not in fmt:
-            return price_tbl.get("편집포팅", PRICE_EDIT_PORT) or PRICE_EDIT_PORT
-        return price_tbl.get("포팅", PRICE_PORTING) or PRICE_PORTING
+            return price_tbl.get("편집포팅", 0) or 0
+        return price_tbl.get("포팅", 0) or 0
     if "출장" in fmt:
-        return price_tbl.get("FullVod (출장)", PRICE_NEW) or PRICE_NEW
+        return price_tbl.get("FullVod (출장)", 0) or 0
     for k, v in price_tbl.items():
         if k and k in fmt: return v or 0
-    return PRICE_NEW
+    return 0
 
 def get_travel_for(cr, travel_rate=PRICE_TRAVEL_HR):
     """출장비 계산: 1일 4시간 초과 시 4시간으로 캡 적용"""

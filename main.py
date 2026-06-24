@@ -327,8 +327,17 @@ def content_edit_page(request: Request, id: int = 0,
                       db: Session = Depends(get_db)):
     require_login(request)
     row = db.query(Content).filter_by(id=id).first() if id else None
+    # 촬영형식 옵션 = 활성 단가표 항목(출장 시급 제외) → 단가표에 추가하면 자동 노출
+    fmt_rows = db.query(PriceTable.type_name).filter(
+        PriceTable.is_active == True, PriceTable.category != "travel"
+    ).distinct().order_by(PriceTable.type_name).all()
+    format_options = [r[0] for r in fmt_rows if r[0]]
+    # 기존 데이터가 단가표에 없는 값이면 선택 유지되도록 맨 앞에 추가
+    if row and row.shooting_format and row.shooting_format not in format_options:
+        format_options.insert(0, row.shooting_format)
     return templates.TemplateResponse("content_edit.html", {
         "request": request, "user": get_user(request), "row": row, "MONTHS": MONTHS, "msg": "",
+        "format_options": format_options,
         "f_page": f_page, "f_dept": f_dept, "f_month": f_month,
         "f_fmt": f_fmt, "f_billing": f_billing, "f_search": f_search,
     })
