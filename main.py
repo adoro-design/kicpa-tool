@@ -513,7 +513,7 @@ async def import_gsheet(request: Request, year: int = Form(2026),
         }, scopes=SCOPES)
         gc = gspread.authorize(creds)
         spreadsheet = gc.open_by_key(spreadsheet_id)
-        sheet_name = f"개발관리_{year}"  # 탭명: 개발관리_2026, 개발관리_2025 ...
+        sheet_name = f"개발관리_{year}"
         ws = spreadsheet.worksheet(sheet_name)
         rows = ws.get_all_values()
 
@@ -522,48 +522,29 @@ async def import_gsheet(request: Request, year: int = Form(2026),
 
     try:
         import datetime
-        date_parse_errors = []   # 날짜 파싱 실패 진단용
-        # replace 모드: 수동 데이터 보존 후 삭제
-        manual_data = {}
-        if import_mode == "replace":
-            for r in db.query(Content).filter_by(year=year).all():
-                key = clean_name(r.course_name or "").strip()
-                if key:
-                    manual_data[key] = {
-                        "custom_price":   r.custom_price,
-                        "travel_hours":   r.travel_hours,
-                        "travel_expense": r.travel_expense,
-                        "notes":          r.notes,
-                    }
-            db.query(Content).filter_by(year=year).delete()
-            db.commit()
+        date_parse_errors = []
 
         def to_date_str(v, yr=year):
             if not v: return None
             v = str(v).strip().rstrip(".")
             if not v: return None
             import re as _re
-            # ISO 형식 우선 시도
             try: return date.fromisoformat(v[:10])
             except: pass
-            # 표준 형식들
             try:
                 for fmt in ("%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d", "%Y-%m-%d",
                             "%Y. %m. %d", "%Y. %m. %d."):
                     try: return datetime.datetime.strptime(v, fmt).date()
                     except: pass
             except: pass
-            # 구글 시트 한국식 (연도 포함): "2026. 1. 15"
             m = _re.search(r'(\d{4})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{1,2})', v)
             if m:
                 try: return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
                 except: pass
-            # 연도 포함 한국어: "2026년 1월 15일"
             m = _re.search(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', v)
             if m:
                 try: return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
                 except: pass
-            # ★ 구글 시트 연도 없는 한국식: "01월 05일" → yr년으로 보완
             m = _re.search(r'^(\d{1,2})월\s*(\d{1,2})일$', v)
             if m:
                 try: return date(yr, int(m.group(1)), int(m.group(2)))
@@ -575,11 +556,14 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             try: return int(float(str(v).strip()))
             except: return None
 
+        # ── 1단계: 전체 행 파싱 ──────────────────────────
+        # 수동 입력 필드 — sync 시 절대 덮어쓰지 않음
+        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense'}
+
         prev_month = ""
-        imported = 0
-        # 구글 시트는 0-indexed, 4행부터 = index 3부터
+        parsed_rows = []
+
         for row in rows[3:]:
-            # 최소 3개 컬럼 이상이어야 유효
             def cell(i, maxlen=None):
                 v = str(row[i]).strip() if i < len(row) else ""
                 if maxlen and len(v) > maxlen: v = v[:maxlen]
@@ -600,78 +584,98 @@ async def import_gsheet(request: Request, year: int = Form(2026),
                     break
             if not name_cleaned: name_cleaned = raw_name[:200]
 
-            # 기존 레코드 확인 (append 모드)
-            existing = None
-            if import_mode == "append":
-                existing = db.query(Content).filter_by(
-                    year=year, course_name=name_cleaned
-                ).first()
-
-            c = existing or Content(year=year)
-            c.shooting_month    = (prev_month or None)
-            c.course_name       = name_cleaned
-            c.required_optional = cell(3, 50)  or None
-            c.original_code     = cell(4)      or None   # Text — 길이 제한 없음
-            c.category          = cell(5)      or None
-            c.course_code       = cell(6, 200) or None
-            c.session_count     = to_int_gs(cell(7))
-            c.chapter_count     = to_int_gs(cell(8))
-            c.instructor        = cell(9, 200) or None
-            c.department        = cell(10, 100) or None
-            c.kicpa_manager     = cell(11, 100) or None
-            c.filming_consent   = cell(12, 100) or None
-            c.shooting_time     = cell(14, 100) or None
-            c.shooting_format   = cell(15, 100) or None
-            c.location          = cell(16, 200) or None
-            c.has_quiz          = cell(17, 50)  or None
-            c.quiz_count        = to_int_gs(cell(18))
-            c.materials_supply  = cell(19, 100) or None
-            c.video_marking     = cell(20, 100) or None
-            c.dev_outsource_date = to_date_str(cell(21))
-            c.inspection_date   = to_date_str(cell(22))
-            c.billing           = cell(24, 100) or None
-
-            # 날짜 필드: 파싱된 값이 있으면 업데이트, 없으면 기존 값 유지 (append 모드 덮어쓰기 방지)
+            original_code = cell(4) or None
             new_shoot = to_date_str(cell(13))
             new_open  = to_date_str(cell(23))
-            if new_shoot is not None or existing is None:
-                c.shooting_date = new_shoot
-            if new_open is not None or existing is None:
-                c.open_date = new_open
 
-            # 진단용: 파싱 실패한 날짜 원본값 수집 (최초 5건)
+            # 날짜 파싱 오류 진단 (최초 5건)
             if len(date_parse_errors) < 5:
                 raw13 = cell(13); raw23 = cell(23)
                 if raw13 and new_shoot is None:
                     date_parse_errors.append(f"촬영날짜 파싱실패: [{raw13}]")
                 if raw23 and new_open is None:
                     date_parse_errors.append(f"오픈날짜 파싱실패: [{raw23}]")
-            # Z열 청구월 — "3월", "3", "03", "3월 청구" 등 다양한 형식 정규화
+
+            # 청구월 파싱
             raw_bm = cell(25, 20)
+            billing_month = None
             if raw_bm:
                 import re as _re
                 m_match = _re.search(r'(\d{1,2})월?', raw_bm)
-                c.billing_month = f"{int(m_match.group(1))}월" if m_match else None
+                billing_month = f"{int(m_match.group(1))}월" if m_match else None
+
+            parsed_rows.append({
+                'original_code':      original_code,
+                'shooting_month':     prev_month or None,
+                'course_name':        name_cleaned,
+                'required_optional':  cell(3, 50)  or None,
+                'category':           cell(5)      or None,
+                'course_code':        cell(6, 200) or None,
+                'session_count':      to_int_gs(cell(7)),
+                'chapter_count':      to_int_gs(cell(8)),
+                'instructor':         cell(9, 200) or None,
+                'department':         cell(10, 100) or None,
+                'kicpa_manager':      cell(11, 100) or None,
+                'filming_consent':    cell(12, 100) or None,
+                '_new_shoot':         new_shoot,
+                'shooting_time':      cell(14, 100) or None,
+                'shooting_format':    cell(15, 100) or None,
+                'location':           cell(16, 200) or None,
+                'has_quiz':           cell(17, 50)  or None,
+                'quiz_count':         to_int_gs(cell(18)),
+                'materials_supply':   cell(19, 100) or None,
+                'video_marking':      cell(20, 100) or None,
+                'dev_outsource_date': to_date_str(cell(21)),
+                'inspection_date':    to_date_str(cell(22)),
+                '_new_open':          new_open,
+                'billing':            cell(24, 100) or None,
+                'billing_month':      billing_month,
+            })
+
+        with_code    = [d for d in parsed_rows if d['original_code']]
+        without_code = [d for d in parsed_rows if not d['original_code']]
+
+        # ── 2단계: 원코드 있는 과정 → Upsert ─────────────
+        for data in with_code:
+            new_shoot = data.pop('_new_shoot')
+            new_open  = data.pop('_new_open')
+            existing = db.query(Content).filter_by(
+                year=year, original_code=data['original_code']
+            ).first()
+            if existing:
+                for k, v in data.items():
+                    if k not in PROTECTED:
+                        setattr(existing, k, v)
+                if new_shoot is not None:
+                    existing.shooting_date = new_shoot
+                if new_open is not None:
+                    existing.open_date = new_open
             else:
-                c.billing_month = None
-
-            # 수동 데이터 복원
-            key = clean_name(name_cleaned).strip()
-            if key in manual_data:
-                md = manual_data[key]
-                if md.get("custom_price")   is not None: c.custom_price   = md["custom_price"]
-                if md.get("travel_hours")   is not None: c.travel_hours   = md["travel_hours"]
-                if md.get("travel_expense") is not None: c.travel_expense = md["travel_expense"]
-                if md.get("notes")          is not None: c.notes          = md["notes"]
-
-            if not existing:
+                c = Content(year=year, **data)
+                c.shooting_date = new_shoot
+                c.open_date = new_open
                 db.add(c)
-            imported += 1
+
+        # ── 3단계: 원코드 없는 과정 → 삭제 후 재삽입 ──────
+        db.query(Content).filter_by(year=year).filter(
+            or_(Content.original_code == None, Content.original_code == "")
+        ).delete(synchronize_session=False)
+        db.flush()
+
+        for data in without_code:
+            new_shoot = data.pop('_new_shoot')
+            new_open  = data.pop('_new_open')
+            c = Content(year=year, **data)
+            c.shooting_date = new_shoot
+            c.open_date = new_open
+            db.add(c)
 
         db.commit()
-        msg = f"구글 시트에서 {imported}건 동기화 완료 ({year}년, {import_mode} 모드)"
+        msg = (f"구글 시트 동기화 완료 ({year}년) — "
+               f"원코드 있음: {len(with_code)}건 upsert, "
+               f"원코드 없음: {len(without_code)}건 재삽입")
         if date_parse_errors:
-            msg += " ⚠️ 날짜 파싱 실패 샘플: " + " / ".join(date_parse_errors)
+            msg += " ⚠️ 날짜 파싱 실패: " + " / ".join(date_parse_errors)
         return templates.TemplateResponse("import.html", {
             "request": request, "user": get_user(request),
             "msg": msg, "msg_type": "success", "gsheet_ok": gsheet_ok
@@ -693,26 +697,15 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
     import openpyxl
     from openpyxl.utils.datetime import from_excel
 
+    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
     content = await excel_file.read()
     buf = io.BytesIO(content)
     try:
         wb = openpyxl.load_workbook(buf, data_only=True)
         ws = wb["개발관리"] if "개발관리" in wb.sheetnames else wb.active
 
-        # replace 모드: 삭제 전 수동 입력 데이터 저장 (과정명 기준 복원용)
-        manual_data = {}
-        if import_mode == "replace":
-            for r in db.query(Content).filter_by(year=year).all():
-                key = clean_name(r.course_name or "").strip()
-                if key:
-                    manual_data[key] = {
-                        "custom_price":   r.custom_price,
-                        "travel_hours":   r.travel_hours,
-                        "travel_expense": r.travel_expense,
-                        "notes":          r.notes,
-                    }
-            db.query(Content).filter_by(year=year).delete()
-            db.commit()
+        # 수동 입력 필드 — sync 시 절대 덮어쓰지 않음
+        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense'}
 
         def to_date(v):
             if v is None: return None
@@ -725,8 +718,10 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
             except: pass
             return None
 
+        # ── 1단계: 전체 행 파싱 ──────────────────────────
         prev_month = ""
-        imported = 0
+        parsed_rows = []
+
         for row in ws.iter_rows(min_row=4, values_only=True):
             raw_name = str(row[2] or "").strip()
             if not raw_name: continue
@@ -734,7 +729,6 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
             month_val = str(row[1] or "").strip()
             if month_val: prev_month = month_val
 
-            # 과정명 정리: ==> 기준으로 분리 후 대괄호 제거
             name_parts = re.split(r'\s*\n*\s*==>', raw_name)
             name_cleaned = ""
             for line in name_parts[0].split('\n'):
@@ -745,55 +739,94 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
             if not name_cleaned:
                 name_cleaned = re.sub(r'\[.*?\]', '', name_parts[0].replace('\n', ' ')).strip()
 
-            # 비고: ==> 이후 내용 + 기존 엑셀 비고 병합
-            extra_note = ("==>" + name_parts[1].strip()) if len(name_parts) > 1 else ""
-            excel_note = str(row[26] or "").strip()   # 비고: 비용청구 월 추가로 한 칸 밀림
-            combined_notes = "\n".join(filter(None, [extra_note, excel_note])) or None
-
             course_name = name_cleaned
             if not course_name: continue
-            # 과정명이 순수 숫자이거나 너무 짧으면 불필요한 행으로 간주 → 건너뜀
             if course_name.isdigit() or len(course_name) < 2: continue
 
-            # 촬영날짜에서 월 자동 추출
+            extra_note = ("==>" + name_parts[1].strip()) if len(name_parts) > 1 else ""
+            excel_note = str(row[26] or "").strip()
+            combined_notes = "\n".join(filter(None, [extra_note, excel_note])) or None
+
             shoot_date = to_date(row[13])
             auto_month = f"{shoot_date.month}월" if shoot_date else prev_month
+            original_code = str(row[4] or "").strip() or None
 
-            # 수동 입력 데이터 복원 (replace 모드에서 기존 데이터 유지)
-            manual = manual_data.get(course_name.strip(), {})
+            parsed_rows.append({
+                'original_code':      original_code,
+                'shooting_month':     auto_month or None,
+                'course_name':        course_name,
+                'required_optional':  str(row[3] or "") or None,
+                'category':           str(row[5] or "") or None,
+                'course_code':        str(row[6] or "") or None,
+                'session_count':      _to_int(row[7]),
+                'chapter_count':      _to_int(row[8]),
+                'instructor':         str(row[9]  or "") or None,
+                'department':         str(row[10] or "") or None,
+                'kicpa_manager':      str(row[11] or "") or None,
+                'filming_consent':    str(row[12] or "") or None,
+                '_shoot_date':        shoot_date,
+                'shooting_time':      str(row[14] or "") or None,
+                'shooting_format':    str(row[15] or "") or None,
+                'location':           str(row[16] or "") or None,
+                'has_quiz':           str(row[17] or "") or None,
+                'quiz_count':         _to_int(row[18]),
+                'materials_supply':   str(row[19] or "") or None,
+                'video_marking':      str(row[20] or "") or None,
+                'dev_outsource_date': to_date(row[21]),
+                'inspection_date':    to_date(row[22]),
+                'open_date':          to_date(row[23]),
+                'billing':            str(row[24] or "") or None,
+                'billing_month':      normalize_month(str(row[25] or "")),
+                'notes':              combined_notes,
+            })
 
-            db.add(Content(year=year, shooting_month=auto_month or None,
-                course_name=course_name, required_optional=str(row[3] or "") or None,
-                original_code=str(row[4] or "") or None, category=str(row[5] or "") or None,
-                course_code=str(row[6] or "") or None,
-                session_count=_to_int(row[7]),
-                chapter_count=_to_int(row[8]),
-                instructor=str(row[9] or "") or None, department=str(row[10] or "") or None,
-                kicpa_manager=str(row[11] or "") or None, filming_consent=str(row[12] or "") or None,
-                shooting_date=shoot_date, shooting_time=str(row[14] or "") or None,
-                shooting_format=str(row[15] or "") or None, location=str(row[16] or "") or None,
-                has_quiz=str(row[17] or "") or None,
-                quiz_count=_to_int(row[18]),
-                materials_supply=str(row[19] or "") or None, video_marking=str(row[20] or "") or None,
-                dev_outsource_date=to_date(row[21]), inspection_date=to_date(row[22]),
-                open_date=to_date(row[23]), billing=str(row[24] or "") or None,
-                billing_month=normalize_month(str(row[25] or "")),
-                # 수동 입력값: Excel에 없는 항목이므로 기존 값 우선 복원
-                custom_price=manual.get("custom_price"),
-                travel_hours=manual.get("travel_hours"),
-                travel_expense=manual.get("travel_expense"),
-                # 비고: Excel 값 우선, 없으면 기존 수동 입력 비고 유지
-                notes=combined_notes or manual.get("notes")))
-            imported += 1
+        with_code    = [d for d in parsed_rows if d['original_code']]
+        without_code = [d for d in parsed_rows if not d['original_code']]
+
+        # ── 2단계: 원코드 있는 과정 → Upsert ─────────────
+        for data in with_code:
+            shoot_date = data.pop('_shoot_date')
+            existing = db.query(Content).filter_by(
+                year=year, original_code=data['original_code']
+            ).first()
+            if existing:
+                for k, v in data.items():
+                    if k not in PROTECTED:
+                        setattr(existing, k, v)
+                if shoot_date is not None:
+                    existing.shooting_date = shoot_date
+            else:
+                c = Content(year=year, **data)
+                c.shooting_date = shoot_date
+                db.add(c)
+
+        # ── 3단계: 원코드 없는 과정 → 삭제 후 재삽입 ──────
+        db.query(Content).filter_by(year=year).filter(
+            or_(Content.original_code == None, Content.original_code == "")
+        ).delete(synchronize_session=False)
+        db.flush()
+
+        for data in without_code:
+            shoot_date = data.pop('_shoot_date')
+            c = Content(year=year, **data)
+            c.shooting_date = shoot_date
+            db.add(c)
 
         db.commit()
-        msg = f"{imported}건의 콘텐츠를 가져왔습니다."
+        imported = len(parsed_rows)
+        msg = (f"{imported}건 가져오기 완료 — "
+               f"원코드 있음: {len(with_code)}건 upsert, "
+               f"원코드 없음: {len(without_code)}건 재삽입")
         msg_type = "success"
     except Exception as e:
+        db.rollback()
         msg = f"오류: {str(e)}"
         msg_type = "danger"
 
-    return templates.TemplateResponse("import.html", {"request": request, "user": get_user(request), "msg": msg, "msg_type": msg_type})
+    return templates.TemplateResponse("import.html", {
+        "request": request, "user": get_user(request),
+        "msg": msg, "msg_type": msg_type, "gsheet_ok": gsheet_ok
+    })
 
 # ── 정산 관리 ────────────────────────────
 @app.get("/billing", response_class=HTMLResponse)
