@@ -126,7 +126,7 @@
         {% for c in this_month_courses %}
         <tr>
           <td style="padding-left:18px;">
-            <div style="font-size:.82rem; font-weight:600; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.course_name | clean_name }}</div>
+            <div style="font-size:.82rem; font-weight:600;">{{ c.course_name | clean_name }}</div>
             <div class="text-muted" style="font-size:.75rem;">{{ c.department }} · {{ c.shooting_date.strftime('%m/%d') if c.shooting_date else '-' }}</div>
           </td>
           <td class="text-end" style="white-space:nowrap; padding-right:18px;">{% if c.shooting_format %}<span class="badge-format">{{ c.shooting_format }}</span>{% endif %}</td>
