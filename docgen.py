@@ -283,6 +283,10 @@ def gen_pnl_excel(courses, dept, month_str, year, price_tbl,
     ws['F11'] = round(prod_rate * 100) / 100; ws['F11'].number_format = '0%' 
     ws['D17'] = STUDIO_UNIT_PRICE if include_studio else 0
     ws['E17'] = studio_hours       if include_studio else 0
+    # 스튜디오 대관 미포함 부서: 라벨·담당·단위·본부코드 제거 (I17 수식은 유지)
+    if not include_studio:
+        for col in ('B', 'C', 'F', 'G'):
+            ws[f'{col}17'] = None
     ws['E32'] = MONTHLY_SALARY
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
 
