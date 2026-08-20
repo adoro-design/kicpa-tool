@@ -214,31 +214,57 @@ def _load_studio_from_gsheet(db):
     spreadsheet = gc.open_by_key(spreadsheet_id)
     ws = spreadsheet.worksheet("스튜디오대관")
     rows = ws.get_all_values()
-    # 1행=제목, 2행=헤더 → 3행(index 2)부터 데이터
     if len(rows) < 3:
         return 0, f"시트 행 수 부족 ({len(rows)}행)"
+
+    # 헤더 행에서 컬럼 위치 자동 탐색 (제목행 포함해 최대 5행 이내)
+    COL_NAMES = {"연도": None, "청구월": None, "시간수": None, "단가": None, "비고": None}
+    header_idx = None
+    for ri, row in enumerate(rows[:5]):
+        for ci, cell in enumerate(row):
+            if cell.strip() in COL_NAMES:
+                COL_NAMES[cell.strip()] = ci
+        if COL_NAMES["연도"] is not None and COL_NAMES["시간수"] is not None:
+            header_idx = ri
+            break
+
+    if header_idx is None:
+        return 0, f"헤더행을 찾지 못함. 첫 5행: {[r[:4] for r in rows[:5]]}"
+
+    ci_year   = COL_NAMES["연도"]
+    ci_month  = COL_NAMES["청구월"]
+    ci_hours  = COL_NAMES["시간수"]
+    ci_price  = COL_NAMES["단가"]
+    ci_notes  = COL_NAMES.get("비고")
+
     count = 0
     errors = []
-    for i, row in enumerate(rows[2:], start=3):
+    last_year = None
+    for i, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
         if not any(row):
             continue
         try:
-            year_v    = int(row[0])
-            month_v   = row[1].strip()
-            hours_v   = int(str(row[2]).replace(",", "").strip())
+            raw_year = str(row[ci_year]).strip() if len(row) > ci_year else ""
+            year_v   = int(raw_year) if raw_year else last_year
+            if not year_v:
+                continue
+            last_year = year_v
+            month_v  = row[ci_month].strip()
+            hours_v  = int(str(row[ci_hours]).replace(",", "").strip())
             if hours_v <= 0:
                 continue
-            unit_price_v = int(str(row[3]).replace(",", "").strip()) if len(row) > 3 and str(row[3]).strip() else 45000
-            notes_v   = row[5].strip() if len(row) > 5 and row[5].strip() else None
+            raw_price = str(row[ci_price]).replace(",", "").strip() if ci_price is not None and len(row) > ci_price else ""
+            unit_price_v = int(raw_price) if raw_price else 45000
+            notes_v  = row[ci_notes].strip() if ci_notes is not None and len(row) > ci_notes and row[ci_notes].strip() else None
             month_num = MONTH_ORDER.get(month_v, 0) + 1
-            date_v    = date_cls(year_v, month_num, 1)
+            date_v   = date_cls(year_v, month_num, 1)
             db.add(StudioRental(year=year_v, month=month_v, usage_date=date_v,
                                 hours=hours_v, unit_price=unit_price_v, notes=notes_v))
             count += 1
         except Exception as e:
             errors.append(f"{i}행:{e}")
     db.commit()
-    detail = f"파싱오류 {len(errors)}건: {'; '.join(errors[:3])}" if errors else f"총 {len(rows)-2}행 읽음"
+    detail = f"파싱오류 {len(errors)}건: {'; '.join(errors[:3])}" if errors else f"총 {len(rows)-header_idx-1}행 읽음"
     return count, detail
 
 def _init_studio_rentals():
