@@ -126,18 +126,19 @@ def calc_labor_amounts(ps, pe, pm_rate, prod_rate):
     return (round(d/30*pm_rate*MONTHLY_SALARY+1),
             round(d/30*prod_rate*MONTHLY_SALARY+1))
 
-def calc_prod_rate_from_standards(courses, ps, pe):
+def calc_prod_rate_from_standards(courses, ps, pe, work_hours=None):
     """콘텐츠 유형별 표준시간 기반 PROD 투입비율 계산"""
+    _wh = work_hours or WORK_HOURS_PER_SESSION
     total_work = 0.0
     for c in courses:
         fmt = c.shooting_format or ""
         sessions = c.session_count or 0
         if "포팅" in fmt:
-            hours = WORK_HOURS_PER_SESSION['edit_porting'] if ("편집" in fmt and "무편집" not in fmt) else WORK_HOURS_PER_SESSION['porting']
+            hours = _wh['edit_porting'] if ("편집" in fmt and "무편집" not in fmt) else _wh['porting']
         elif "출장" in fmt:
-            hours = WORK_HOURS_PER_SESSION['travel']
+            hours = _wh['travel']
         else:
-            hours = WORK_HOURS_PER_SESSION['default']
+            hours = _wh['default']
         total_work += sessions * hours
 
     available = get_weekday_count(ps, pe) * WORK_HOURS_PER_DAY
@@ -146,22 +147,23 @@ def calc_prod_rate_from_standards(courses, ps, pe):
     return total_work / available
 
 
-def adjust_rates(revenue, studio_a, ps, pe, courses=None):
+def adjust_rates(revenue, studio_a, ps, pe, courses=None, work_hours=None, target_profit=None):
     """PM=1% 고정, PROD=표준시간 기반 계산, 손익률 30% 이상 보장. 비율 정수% 반올림."""
-    pm_fixed = 0.01  # PM 1% 고정
+    pm_fixed  = 0.01  # PM 1% 고정
+    _tp       = target_profit if target_profit is not None else TARGET_PROFIT
 
     # PROD: 표준시간 기반 계산 → 정수% 반올림
-    raw_prod  = calc_prod_rate_from_standards(courses, ps, pe) if courses else PROD_RATE
-    prod_rate = round(raw_prod * 100) / 100   # e.g. 0.3125 → 0.31 (31%)
+    raw_prod  = calc_prod_rate_from_standards(courses, ps, pe, work_hours=work_hours) if courses else PROD_RATE
+    prod_rate = round(raw_prod * 100) / 100
 
-    # 손익률 30% 확인
+    # 손익률 확인
     pm_a, prod_a = calc_labor_amounts(ps, pe, pm_fixed, prod_rate)
-    if revenue > 0 and (revenue - pm_a - prod_a - studio_a) / revenue >= TARGET_PROFIT:
-        return pm_fixed, prod_rate  # 30% 이상 → 그대로 사용
+    if revenue > 0 and (revenue - pm_a - prod_a - studio_a) / revenue >= _tp:
+        return pm_fixed, prod_rate
 
-    # PROD 축소하여 30% 보장
+    # PROD 축소하여 목표 손익률 보장
     period_d  = (pe - ps).days
-    max_labor = (1 - TARGET_PROFIT) * revenue - studio_a - 2
+    max_labor = (1 - _tp) * revenue - studio_a - 2
     pm_amt    = round(period_d / 30 * pm_fixed * MONTHLY_SALARY + 1)
     max_prod  = max_labor - pm_amt
     if max_prod <= 0 or period_d <= 0:
@@ -552,17 +554,19 @@ def generate_all(courses, dept, month_str, year, price_tbl,
     write_dt = get_last_business_day(year, mn)
     revenue  = calc_revenue(courses, price_tbl)
     studio_a = studio_hours * STUDIO_UNIT_PRICE if include_studio else 0
-    # calc_settings 적용 (청구월 기준 유효 설정)
+    # calc_settings → 로컬 사본 생성 (전역변수 뮤테이션 없음)
+    _work_hours    = dict(WORK_HOURS_PER_SESSION)
+    _target_profit = TARGET_PROFIT
     if calc_settings:
-        WORK_HOURS_PER_SESSION['default']      = calc_settings.get('work_hours_chromakey', 2.5)
-        WORK_HOURS_PER_SESSION['porting']      = calc_settings.get('work_hours_porting', 0.5)
-        WORK_HOURS_PER_SESSION['edit_porting'] = calc_settings.get('work_hours_edit_porting', 1.0)
-        WORK_HOURS_PER_SESSION['travel']       = calc_settings.get('work_hours_travel', 3.5)
-        global TARGET_PROFIT
-        TARGET_PROFIT = calc_settings.get('target_profit_pct', 30.0) / 100
+        _work_hours['default']      = calc_settings.get('work_hours_chromakey', 2.5)
+        _work_hours['porting']      = calc_settings.get('work_hours_porting', 0.5)
+        _work_hours['edit_porting'] = calc_settings.get('work_hours_edit_porting', 1.0)
+        _work_hours['travel']       = calc_settings.get('work_hours_travel', 3.5)
+        _target_profit = calc_settings.get('target_profit_pct', 30.0) / 100
 
-    # 출장비 포함 전체 매출 기준으로 투입비율 계산 (출장비 1차시당 1시간 반영)
-    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe, courses=courses)
+    # 출장비 포함 전체 매출 기준으로 투입비율 계산
+    pm_rate, prod_rate = adjust_rates(revenue, studio_a, ps, pe, courses=courses,
+                                      work_hours=_work_hours, target_profit=_target_profit)
 
     mm_str = f"{mn:02d}월"
     mmdd   = write_dt.strftime('%m%d')   # 작성일 MMDD (예: 0430)

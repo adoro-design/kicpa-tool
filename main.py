@@ -17,7 +17,11 @@ import calendar as _calendar
 load_dotenv()
 
 app = FastAPI(title="KICPA 콘텐츠 정산 관리")
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "kicpa-dev-secret"))
+_secret_key = os.getenv("SECRET_KEY", "kicpa-dev-secret")
+if _secret_key == "kicpa-dev-secret":
+    import logging as _logging
+    _logging.warning("⚠️  SECRET_KEY가 기본값입니다. Render.com 환경변수에 SECRET_KEY를 설정하세요.")
+app.add_middleware(SessionMiddleware, secret_key=_secret_key)
 
 @app.exception_handler(Exception)
 async def all_exception_handler(request: Request, exc: Exception):
@@ -744,9 +748,17 @@ async def import_gsheet(request: Request, year: int = Form(2026),
                 m_match = _re.search(r'(\d{1,2})월?', raw_bm)
                 billing_month = f"{int(m_match.group(1))}월" if m_match else None
 
+            # 촬영월: 촬영날짜(N열)가 있으면 날짜 기반, 없으면 B열 carry-forward
+            gs_shoot_month = prev_month or None
+            if new_shoot:
+                try:
+                    from datetime import date as _d
+                    gs_shoot_month = f"{_d.fromisoformat(new_shoot).month}월"
+                except: pass
+
             parsed_rows.append({
                 'original_code':      original_code,
-                'shooting_month':     prev_month or None,
+                'shooting_month':     gs_shoot_month,
                 'course_name':        name_cleaned,
                 'required_optional':  cell(3, 50)  or None,
                 'category':           cell(5)      or None,
@@ -1289,10 +1301,9 @@ def studio_restore_gsheet(request: Request, year: int = Form(2026)):
         try:
             before = db.query(StudioRental).count()
             db.query(StudioRental).delete(synchronize_session=False)
-            db.commit()
             for r in records:
                 db.add(StudioRental(**r))
-            db.commit()
+            db.commit()  # 삭제+삽입 단일 트랜잭션
             after = db.query(StudioRental).count()
             msg = f"복원 완료: 삭제 {before}건 → 삽입 {after}건 (시트 파싱 {len(records)}건)"
         except Exception as e:
@@ -1397,13 +1408,16 @@ def documents_generate(request: Request, year: int = Form(2026),
             # 부서에 담당자가 여럿 → kicpa_manager 기준으로 분리 생성
             from collections import defaultdict
 
-            # calc_settings 전역 적용 (generate_all과 동일)
+            # calc_settings → 로컬 사본 (전역변수 뮤테이션 없음)
+            import docgen as _docgen
+            _work_hours    = dict(_docgen.WORK_HOURS_PER_SESSION)
+            _target_profit = _docgen.TARGET_PROFIT
             if calc_cfg:
-                docgen.WORK_HOURS_PER_SESSION['default']      = calc_cfg.get('work_hours_chromakey', 2.5)
-                docgen.WORK_HOURS_PER_SESSION['porting']      = calc_cfg.get('work_hours_porting', 0.5)
-                docgen.WORK_HOURS_PER_SESSION['edit_porting'] = calc_cfg.get('work_hours_edit_porting', 1.0)
-                docgen.WORK_HOURS_PER_SESSION['travel']       = calc_cfg.get('work_hours_travel', 3.5)
-                docgen.TARGET_PROFIT = calc_cfg.get('target_profit_pct', 30.0) / 100
+                _work_hours['default']      = calc_cfg.get('work_hours_chromakey', 2.5)
+                _work_hours['porting']      = calc_cfg.get('work_hours_porting', 0.5)
+                _work_hours['edit_porting'] = calc_cfg.get('work_hours_edit_porting', 1.0)
+                _work_hours['travel']       = calc_cfg.get('work_hours_travel', 3.5)
+                _target_profit = calc_cfg.get('target_profit_pct', 30.0) / 100
 
             mn_num   = docgen.get_month_number(month)
             write_dt = docgen.get_last_business_day(year, mn_num)
@@ -1442,7 +1456,8 @@ def documents_generate(request: Request, year: int = Form(2026),
                     studio_a = studio_hours * docgen.STUDIO_UNIT_PRICE if sub_include_studio else 0
 
                     pm_rate, prod_rate = docgen.adjust_rates(
-                        all_revenue, studio_a, full_ps, full_pe, courses=courses)
+                        all_revenue, studio_a, full_ps, full_pe, courses=courses,
+                        work_hours=_work_hours, target_profit=_target_profit)
 
                     # 손익분석서: 부서 전체 과정 기준
                     pnl = docgen.gen_pnl_excel(

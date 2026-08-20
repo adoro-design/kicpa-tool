@@ -236,7 +236,7 @@
         {% set total_amt.val = total_amt.val + amt %}
         <tr>
           <td><span class="badge-billing-month">{{ (r.billing_month | normalize_month) or '-' }}</span></td>
-          <td><span class="badge-shoot-month">{{ (r.shooting_month | normalize_month) or '-' }}</span></td>
+          <td><span class="badge-shoot-month">{% if r.shooting_date %}{{ r.shooting_date.month }}월{% else %}{{ (r.shooting_month | normalize_month) or '-' }}{% endif %}</span></td>
           <td style="max-width:220px; font-size:.84rem;">
             <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ r.course_name }}">
               {{ r.course_name | clean_name }}
