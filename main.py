@@ -144,6 +144,8 @@ def startup():
         pass
     # 고객담당자 초기 데이터 (DB 초기화 후 자동 복원)
     _init_customer_contacts()
+    # 감사인증기준본부 부서명 마이그레이션 (-1/-2 → 통합명 + kicpa_manager)
+    _migrate_audit_contacts()
 
 def _init_customer_contacts():
     CONTACTS = [
@@ -162,6 +164,25 @@ def _init_customer_contacts():
             for c in CONTACTS:
                 db.add(CustomerContact(**c))
             db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+def _migrate_audit_contacts():
+    """감사인증기준본부-1/-2 레코드를 통합 부서명 + kicpa_manager로 자동 수정."""
+    MAPPING = {
+        "감사인증기준본부-1": "박상현",
+        "감사인증기준본부-2": "김지연",
+    }
+    try:
+        db = SessionLocal()
+        for old_dept, manager in MAPPING.items():
+            rows = db.query(CustomerContact).filter_by(department=old_dept).all()
+            for row in rows:
+                row.department    = "감사인증기준본부"
+                row.kicpa_manager = manager
+        db.commit()
     except Exception:
         pass
     finally:
