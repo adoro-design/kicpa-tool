@@ -146,6 +146,8 @@ def startup():
     _init_customer_contacts()
     # 감사인증기준본부 부서명 마이그레이션 (-1/-2 → 통합명 + kicpa_manager)
     _migrate_audit_contacts()
+    # 스튜디오 대관 데이터 복원 (DB 비어있을 때 구글시트에서)
+    _init_studio_rentals()
 
 def _init_customer_contacts():
     CONTACTS = [
@@ -183,6 +185,70 @@ def _migrate_audit_contacts():
                 row.department    = "감사인증기준본부"
                 row.kicpa_manager = manager
         db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+def _load_studio_from_gsheet(db):
+    """구글시트 '스튜디오대관' 시트에서 StudioRental 데이터를 읽어 INSERT. 성공 건수 반환.
+
+    시트 형식 (1행=제목, 2행=헤더, 3행~=데이터):
+    연도 | 청구월 | 시간수 | 단가 | 합계 | 비고
+    - 시간수가 0이거나 비어있는 행은 건너뜀 (합계 행 포함)
+    - 사용날짜는 해당 월 1일로 자동 설정
+    """
+    from datetime import date as date_cls
+    spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
+    if not (os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and spreadsheet_id):
+        return 0
+    import gspread
+    from google.oauth2.service_account import Credentials
+    SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    private_key = os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n")
+    creds = Credentials.from_service_account_info({
+        "type": "service_account",
+        "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+        "private_key": private_key,
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }, scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open_by_key(spreadsheet_id)
+    ws = spreadsheet.worksheet("스튜디오대관")
+    rows = ws.get_all_values()
+    # 1행=제목, 2행=헤더 → 3행(index 2)부터 데이터
+    if len(rows) < 3:
+        return 0
+    count = 0
+    for row in rows[2:]:
+        if not any(row):
+            continue
+        try:
+            year_v = int(row[0])           # 연도
+            month_v = row[1].strip()        # 청구월 (예: "4월")
+            hours_v = int(row[2].replace(",", ""))  # 시간수
+            if hours_v <= 0:
+                continue                    # 0시간 행(미사용 월, 합계 등) 제외
+            unit_price_v = int(str(row[3]).replace(",", "")) if len(row) > 3 and str(row[3]).strip() else 45000
+            notes_v = row[5].strip() if len(row) > 5 and row[5].strip() else None
+            # 사용날짜: 해당 월 1일로 설정
+            month_num = MONTH_ORDER.get(month_v, 0) + 1  # 0-based → 1-based
+            date_v = date_cls(year_v, month_num, 1)
+            db.add(StudioRental(year=year_v, month=month_v, usage_date=date_v,
+                                hours=hours_v, unit_price=unit_price_v, notes=notes_v))
+            count += 1
+        except Exception:
+            continue
+    db.commit()
+    return count
+
+def _init_studio_rentals():
+    """DB 초기화 후 구글시트 '스튜디오대관' 시트에서 자동 복원."""
+    try:
+        db = SessionLocal()
+        if db.query(StudioRental).count() > 0:
+            return
+        _load_studio_from_gsheet(db)
     except Exception:
         pass
     finally:
@@ -1156,7 +1222,8 @@ def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
 
 # ── 스튜디오 대관료 관리 ──────────────────────────
 @app.get("/studio", response_class=HTMLResponse)
-def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
+def studio_page(request: Request, year: int = 2026, month: str = "",
+                msg: str = "", db: Session = Depends(get_db)):
     require_login(request)
     q = db.query(StudioRental).filter_by(year=year)
     if month: q = q.filter_by(month=month)
@@ -1171,11 +1238,23 @@ def studio_page(request: Request, year: int = 2026, month: str = "", db: Session
         monthly.setdefault(key, {"hours": 0, "amount": 0})
         monthly[key]["hours"]  += r.hours or 0
         monthly[key]["amount"] += (r.hours or 0) * (r.unit_price or 45000)
+    gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
     return templates.TemplateResponse("studio.html", {
         "request": request, "user": get_user(request),
         "year": year, "month": month, "rentals": rentals,
         "months": months, "MONTHS": MONTHS, "monthly": monthly,
+        "gsheet_ok": gsheet_ok, "msg": msg,
     })
+
+@app.post("/studio/restore-gsheet")
+def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session = Depends(get_db)):
+    require_admin(request)
+    try:
+        count = _load_studio_from_gsheet(db)
+        msg = f"구글시트에서 {count}건 복원 완료." if count else "복원할 데이터가 없거나 시트를 찾을 수 없습니다."
+    except Exception as e:
+        msg = f"오류: {e}"
+    return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
 
 @app.post("/studio/add")
 def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
@@ -1360,56 +1439,6 @@ def documents_generate(request: Request, year: int = Form(2026),
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
     )
-
-# ── 스튜디오 대관료 관리 ──────────────────────────
-@app.get("/studio", response_class=HTMLResponse)
-def studio_page(request: Request, year: int = 2026, month: str = "", db: Session = Depends(get_db)):
-    require_login(request)
-    q = db.query(StudioRental).filter_by(year=year)
-    if month: q = q.filter_by(month=month)
-    rentals = q.order_by(StudioRental.usage_date).all()
-    months = [m[0] for m in db.query(StudioRental.month).filter_by(year=year)
-              .filter(StudioRental.month != None).distinct().all()]
-    months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
-    # 월별 소계
-    monthly = {}
-    for r in db.query(StudioRental).filter_by(year=year).all():
-        key = r.month or "-"
-        monthly.setdefault(key, {"hours": 0, "amount": 0})
-        monthly[key]["hours"]  += r.hours or 0
-        monthly[key]["amount"] += (r.hours or 0) * (r.unit_price or 45000)
-    return templates.TemplateResponse("studio.html", {
-        "request": request, "user": get_user(request),
-        "year": year, "month": month, "rentals": rentals,
-        "months": months, "MONTHS": MONTHS, "monthly": monthly,
-    })
-
-@app.post("/studio/add")
-def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
-    usage_date: str = Form(""), hours: str = Form(""),
-    unit_price: str = Form("45000"), notes: str = Form(""),
-    db: Session = Depends(get_db)):
-    require_editor(request)
-    try:
-        ud = date.fromisoformat(usage_date) if usage_date else None
-        m  = normalize_month(month) or (f"{ud.month}월" if ud else None)
-        if ud and hours:
-            db.add(StudioRental(year=year, month=m, usage_date=ud,
-                hours=int(hours), unit_price=int(unit_price) if unit_price else 45000,
-                notes=notes or None))
-            db.commit()
-    except Exception: pass
-    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
-
-@app.post("/studio/delete/{rid}")
-def studio_delete(request: Request, rid: int, year: int = Form(2026), month: str = Form(""),
-    db: Session = Depends(get_db)):
-    require_editor(request)
-    r = db.query(StudioRental).filter_by(id=rid).first()
-    m = r.month if r else month
-    db.query(StudioRental).filter_by(id=rid).delete()
-    db.commit()
-    return RedirectResponse(f"/studio?year={year}&month={m or ''}", 302)
 
 # ── 문서 생성 ────────────────────────────
 @app.get("/documents", response_class=HTMLResponse)

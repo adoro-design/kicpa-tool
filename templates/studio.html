@@ -3,6 +3,21 @@
 {% block page_title %}스튜디오 대관료 관리{% endblock %}
 
 {% block content %}
+{% if msg %}
+<div class="alert alert-info py-2 mb-3" style="font-size:.88rem;">{{ msg }}</div>
+{% endif %}
+
+{% if gsheet_ok %}
+<div class="d-flex justify-content-end mb-2">
+  <form method="post" action="/studio/restore-gsheet" onsubmit="return confirm('구글시트 \'스튜디오대관\' 시트에서 데이터를 불러옵니다. 계속하시겠습니까?')">
+    <input type="hidden" name="year" value="{{ year }}">
+    <button type="submit" class="btn btn-sm btn-outline-primary {% if user and user.role != 'admin' %}d-none{% endif %}">
+      <i class="bi-cloud-download me-1"></i>구글시트에서 복원
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <div class="row g-3 mb-4">
   <!-- 월별 소계 카드 -->
   {% for m in MONTHS if m in monthly %}{% set stat = monthly[m] %}
