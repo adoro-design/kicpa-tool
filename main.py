@@ -191,17 +191,15 @@ def _migrate_audit_contacts():
         db.close()
 
 def _load_studio_from_gsheet(db):
-    """구글시트 '스튜디오대관' 시트에서 StudioRental 데이터를 읽어 INSERT. 성공 건수 반환.
-
+    """구글시트 '스튜디오대관' 시트에서 StudioRental 데이터를 읽어 INSERT.
+    반환값: (성공 건수, 진단 메시지)
     시트 형식 (1행=제목, 2행=헤더, 3행~=데이터):
     연도 | 청구월 | 시간수 | 단가 | 합계 | 비고
-    - 시간수가 0이거나 비어있는 행은 건너뜀 (합계 행 포함)
-    - 사용날짜는 해당 월 1일로 자동 설정
     """
     from datetime import date as date_cls
     spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
     if not (os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and spreadsheet_id):
-        return 0
+        return 0, "Google API 환경변수 미설정"
     import gspread
     from google.oauth2.service_account import Credentials
     SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -218,29 +216,30 @@ def _load_studio_from_gsheet(db):
     rows = ws.get_all_values()
     # 1행=제목, 2행=헤더 → 3행(index 2)부터 데이터
     if len(rows) < 3:
-        return 0
+        return 0, f"시트 행 수 부족 ({len(rows)}행)"
     count = 0
-    for row in rows[2:]:
+    errors = []
+    for i, row in enumerate(rows[2:], start=3):
         if not any(row):
             continue
         try:
-            year_v = int(row[0])           # 연도
-            month_v = row[1].strip()        # 청구월 (예: "4월")
-            hours_v = int(row[2].replace(",", ""))  # 시간수
+            year_v    = int(row[0])
+            month_v   = row[1].strip()
+            hours_v   = int(str(row[2]).replace(",", "").strip())
             if hours_v <= 0:
-                continue                    # 0시간 행(미사용 월, 합계 등) 제외
-            unit_price_v = int(str(row[3]).replace(",", "")) if len(row) > 3 and str(row[3]).strip() else 45000
-            notes_v = row[5].strip() if len(row) > 5 and row[5].strip() else None
-            # 사용날짜: 해당 월 1일로 설정
-            month_num = MONTH_ORDER.get(month_v, 0) + 1  # 0-based → 1-based
-            date_v = date_cls(year_v, month_num, 1)
+                continue
+            unit_price_v = int(str(row[3]).replace(",", "").strip()) if len(row) > 3 and str(row[3]).strip() else 45000
+            notes_v   = row[5].strip() if len(row) > 5 and row[5].strip() else None
+            month_num = MONTH_ORDER.get(month_v, 0) + 1
+            date_v    = date_cls(year_v, month_num, 1)
             db.add(StudioRental(year=year_v, month=month_v, usage_date=date_v,
                                 hours=hours_v, unit_price=unit_price_v, notes=notes_v))
             count += 1
-        except Exception:
-            continue
+        except Exception as e:
+            errors.append(f"{i}행:{e}")
     db.commit()
-    return count
+    detail = f"파싱오류 {len(errors)}건: {'; '.join(errors[:3])}" if errors else f"총 {len(rows)-2}행 읽음"
+    return count, detail
 
 def _init_studio_rentals():
     """DB 초기화 후 구글시트 '스튜디오대관' 시트에서 자동 복원."""
@@ -248,7 +247,7 @@ def _init_studio_rentals():
         db = SessionLocal()
         if db.query(StudioRental).count() > 0:
             return
-        _load_studio_from_gsheet(db)
+        _load_studio_from_gsheet(db)  # 반환값 무시 (startup 중)
     except Exception:
         pass
     finally:
@@ -1250,8 +1249,11 @@ def studio_page(request: Request, year: int = 2026, month: str = "",
 def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session = Depends(get_db)):
     require_admin(request)
     try:
-        count = _load_studio_from_gsheet(db)
-        msg = f"구글시트에서 {count}건 복원 완료." if count else "복원할 데이터가 없거나 시트를 찾을 수 없습니다."
+        count, detail = _load_studio_from_gsheet(db)
+        if count:
+            msg = f"구글시트에서 {count}건 복원 완료."
+        else:
+            msg = f"복원 데이터 없음. ({detail})"
     except Exception as e:
         msg = f"오류: {e}"
     return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
