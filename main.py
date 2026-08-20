@@ -410,9 +410,10 @@ def dashboard(request: Request, year: int = 2026, db: Session = Depends(get_db))
 
     recent = db.query(Content).filter_by(year=year).order_by(Content.id.desc()).limit(8).all()
 
+    years = sorted([y[0] for y in db.query(Content.year).distinct().all()], reverse=True) or [2026]
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "user": get_user(request),
-        "year": year, "total": total, "shot": shot, "opened": opened, "billed": billed,
+        "year": year, "years": years, "total": total, "shot": shot, "opened": opened, "billed": billed,
         "dept_summary": dept_summary,
         "monthly_revenue": {m: monthly_revenue.get(m, 0) for m in MONTHS},
         "dept_revenue": dept_revenue,
