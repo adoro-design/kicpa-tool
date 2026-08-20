@@ -21,7 +21,7 @@ _secret_key = os.getenv("SECRET_KEY", "kicpa-dev-secret")
 if _secret_key == "kicpa-dev-secret":
     import logging as _logging
     _logging.warning("⚠️  SECRET_KEY가 기본값입니다. Render.com 환경변수에 SECRET_KEY를 설정하세요.")
-app.add_middleware(SessionMiddleware, secret_key=_secret_key)
+app.add_middleware(SessionMiddleware, secret_key=_secret_key, same_site="strict")
 
 @app.exception_handler(Exception)
 async def all_exception_handler(request: Request, exc: Exception):
@@ -129,7 +129,7 @@ def normalize_month(val):
         num = int(m.group(1))
         if 1 <= num <= 12:
             return f"{num}월"
-    return s  # 매칭 안 되면 원본 반환
+    return None  # 매칭 안 되면 None (저장 방지)
 
 templates.env.filters["fmt_date"] = fmt_date
 templates.env.filters["clean_name"] = clean_name
@@ -1138,6 +1138,11 @@ async def price_table_add(request: Request,
     require_admin(request)
     if category and type_name:
         eff = date.fromisoformat(effective_from) if effective_from else None
+        duplicate = db.query(PriceTable).filter_by(
+            category=category, type_name=type_name, effective_from=eff
+        ).first()
+        if duplicate:
+            return RedirectResponse(f"/price_table?msg=이미+존재하는+항목입니다({type_name})", 302)
         db.add(PriceTable(
             category=category, type_name=type_name,
             unit_price=int(unit_price) if unit_price else None,

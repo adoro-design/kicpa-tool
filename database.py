@@ -133,13 +133,13 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     for col_def in [
-        "ALTER TABLE kicpa_contents ADD COLUMN custom_price INTEGER",
-        "ALTER TABLE kicpa_contents ADD COLUMN billing_month VARCHAR(20)",
-        "ALTER TABLE kicpa_contents ADD COLUMN travel_hours INTEGER",
-        "ALTER TABLE kicpa_contents ADD COLUMN travel_days INTEGER",
-        "ALTER TABLE kicpa_contents ADD COLUMN travel_expense INTEGER",
-        "ALTER TABLE kicpa_price_table ADD COLUMN effective_from DATE",
-        "ALTER TABLE kicpa_customer_contacts ADD COLUMN kicpa_manager VARCHAR(100)",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS custom_price INTEGER",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS billing_month VARCHAR(20)",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS travel_hours INTEGER",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS travel_days INTEGER",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS travel_expense INTEGER",
+        "ALTER TABLE kicpa_price_table ADD COLUMN IF NOT EXISTS effective_from DATE",
+        "ALTER TABLE kicpa_customer_contacts ADD COLUMN IF NOT EXISTS kicpa_manager VARCHAR(100)",
     ]:
         try:
             with engine.connect() as conn:

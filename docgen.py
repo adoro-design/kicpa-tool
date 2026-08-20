@@ -187,11 +187,29 @@ def _replace_para(para, old, new):
     full = para.text
     if old not in full: return False
     replaced = full.replace(old, new)
-    if para.runs:
-        para.runs[0].text = replaced
-        for r in para.runs[1:]: r.text = ""
-    else:
+    if not para.runs:
         para.add_run(replaced)
+        return True
+    # 플레이스홀더를 포함하는 run을 서식 기준으로 사용
+    # (멀티런에 걸쳐 있으면 누적 텍스트에서 발견된 첫 run 기준)
+    src_run = para.runs[0]
+    accumulated = ""
+    for r in para.runs:
+        accumulated += r.text
+        if old in accumulated:
+            src_run = r
+            break
+    # src_run의 rPr(서식)을 runs[0]에 복사 (서식 보존)
+    if src_run is not para.runs[0]:
+        from copy import deepcopy
+        src_rPr = src_run._r.find(qn('w:rPr'))
+        if src_rPr is not None:
+            existing = para.runs[0]._r.find(qn('w:rPr'))
+            if existing is not None:
+                para.runs[0]._r.remove(existing)
+            para.runs[0]._r.insert(0, deepcopy(src_rPr))
+    para.runs[0].text = replaced
+    for r in para.runs[1:]: r.text = ""
     return True
 
 def _replace_doc(doc, old, new):
