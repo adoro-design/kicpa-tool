@@ -179,6 +179,7 @@ def init_db():
                 PriceTable(category="porting", type_name="편집포팅",         unit_price=160000, unit="챕터"),
                 PriceTable(category="travel",  type_name="1 ~ 4시간",        unit_price=100000, unit="시간"),
                 PriceTable(category="travel",  type_name="4시간 초과",        unit_price=None,   unit="시간", note="별도 협의"),
+                PriceTable(category="other",  type_name="신규+기존영상편집",  unit_price=300000, unit="차시"),
             ]
             db.add_all(prices)
             db.commit()

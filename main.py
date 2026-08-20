@@ -1490,87 +1490,97 @@ def documents_generate(request: Request, year: int = Form(2026),
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
     )
 
-# ── 문서 생성 ────────────────────────────
-@app.get("/documents", response_class=HTMLResponse)
-def documents_page(request: Request, year: int = 2026, dept: str = "", month: str = "",
-                   db: Session = Depends(get_db)):
-    require_login(request)
-    depts = [d[0] for d in db.query(Content.department).filter_by(year=year)
-             .filter(Content.department != None).distinct().order_by(Content.department).all()]
-    billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year)
-                      .filter(Content.billing_month != None).distinct().all()]
-    billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
-    # 선택된 부서+월의 과정 미리보기
-    preview = []
-    if dept and month:
-        preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month).all()
-    return templates.TemplateResponse("documents.html", {
-        "request": request, "user": get_user(request),
-        "year": year, "depts": depts, "dept": dept,
-        "billing_months": billing_months, "month": month,
-        "preview": preview, "MONTHS": MONTHS,
-    })
 
-@app.post("/documents/generate")
-def documents_generate(request: Request, year: int = Form(2026),
-                       dept: str = Form(""), month: str = Form(""),
-                       db: Session = Depends(get_db)):
-    import traceback
-    require_editor(request)
-    if not dept or not month:
-        return RedirectResponse(f"/documents?year={year}", 302)
+# ── DB 백업 / 복원 ───────────────────────────────────
+import json as _json
 
+def _row_to_dict(row):
+    from datetime import datetime as _dt, date as _d
+    result = {}
+    for col in row.__table__.columns:
+        val = getattr(row, col.name)
+        if isinstance(val, _dt):
+            val = val.isoformat()
+        elif isinstance(val, _d):
+            val = val.isoformat()
+        result[col.name] = val
+    return result
+
+def _restore_table(db, model_class, rows):
+    from datetime import datetime as _dt, date as _d
+    from sqlalchemy import Date, DateTime
+    db.query(model_class).delete(synchronize_session=False)
+    for row_dict in rows:
+        obj = {}
+        for col in model_class.__table__.columns:
+            val = row_dict.get(col.name)
+            if val is not None:
+                if isinstance(col.type, Date):
+                    try: val = _d.fromisoformat(val[:10])
+                    except: val = None
+                elif isinstance(col.type, DateTime):
+                    try: val = _dt.fromisoformat(val)
+                    except: val = None
+            obj[col.name] = val
+        db.add(model_class(**obj))
+
+@app.get("/backup/download")
+def backup_download(request: Request):
+    require_admin(request)
+    from datetime import datetime as _dt
+    db = SessionLocal()
     try:
-        # 과정 목록
-        courses = db.query(Content).filter_by(year=year, department=dept,
-                                              billing_month=month).all()
-        if not courses:
-            return RedirectResponse(
-                f"/documents?year={year}&dept={dept}&month={month}&msg=no_data", 302)
+        backup = {
+            "created_at": _dt.now().isoformat(),
+            "version": "1",
+            "tables": {
+                "users":             [_row_to_dict(r) for r in db.query(User).all()],
+                "contents":          [_row_to_dict(r) for r in db.query(Content).all()],
+                "price_table":       [_row_to_dict(r) for r in db.query(PriceTable).all()],
+                "calc_settings":     [_row_to_dict(r) for r in db.query(CalcSettings).all()],
+                "studio_rentals":    [_row_to_dict(r) for r in db.query(StudioRental).all()],
+                "customer_contacts": [_row_to_dict(r) for r in db.query(CustomerContact).all()],
+            }
+        }
+    finally:
+        db.close()
+    json_bytes = _json.dumps(backup, ensure_ascii=False, indent=2).encode("utf-8")
+    ts = _dt.now().strftime('%Y%m%d_%H%M%S')
+    return StreamingResponse(
+        io.BytesIO(json_bytes),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=kicpa_backup_{ts}.json"}
+    )
 
-        # 단가표
-        price_tbl = {p.type_name: p.unit_price
-                     for p in db.query(PriceTable).filter_by(is_active=True).all()}
-
-        # 스튜디오 대관료 (해당 월)
-        studio_rentals = db.query(StudioRental).filter_by(year=year, month=month).all()
-        studio_hours   = sum(r.hours or 0 for r in studio_rentals)
-
-        # 이 부서가 해당 월 최대 개발비 부서인지 판별
-        tr = price_tbl.get("1 ~ 4시간", 100000)
-        def dept_revenue(d):
-            rows = db.query(Content).filter_by(year=year, billing_month=month, department=d).all()
-            return sum(
-                docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
-                + docgen.get_travel_for(c, tr)
-                for c in rows
-            )
-        all_depts = [d[0] for d in db.query(Content.department)
-                     .filter_by(year=year, billing_month=month)
-                     .filter(Content.department != None).distinct().all()]
-        max_dept       = max(all_depts, key=dept_revenue) if all_depts else dept
-        include_studio = (dept == max_dept)
-
-        # 고객담당자
-        customer = db.query(CustomerContact).filter_by(
-            department=dept, is_active=True).first()
-
-        # ZIP 생성
-        zip_bytes = docgen.generate_all(
-            courses=courses, dept=dept, month_str=month, year=year,
-            price_tbl=price_tbl, studio_hours=studio_hours,
-            include_studio=include_studio, customer_contact=customer)
-
+@app.post("/backup/restore")
+async def backup_restore(request: Request, file: UploadFile = File(...)):
+    require_admin(request)
+    try:
+        content = await file.read()
+        backup = _json.loads(content.decode("utf-8"))
+        tables = backup.get("tables", {})
+        db = SessionLocal()
+        results = {}
+        try:
+            for key, model in [
+                ("users",             User),
+                ("contents",          Content),
+                ("price_table",       PriceTable),
+                ("calc_settings",     CalcSettings),
+                ("studio_rentals",    StudioRental),
+                ("customer_contacts", CustomerContact),
+            ]:
+                if key in tables:
+                    _restore_table(db, model, tables[key])
+                    results[key] = len(tables[key])
+            db.commit()
+            detail = ", ".join(f"{k} {v}건" for k, v in results.items())
+            msg = f"복원 완료: {detail}"
+        except Exception as e:
+            db.rollback()
+            msg = f"DB 복원 오류: {e}"
+        finally:
+            db.close()
     except Exception as e:
-        err_detail = traceback.format_exc()
-        return templates.TemplateResponse("error.html", {
-            "request": request,
-            "user": get_user(request),
-            "title": "문서 생성 오류",
-            "message": str(e),
-            "detail": err_detail,
-        }, status_code=500)
-
-    from urllib.parse import quote
-    month_num  = docgen.get_month_number(month)
- 
+        msg = f"파일 읽기 오류: {e}"
+    return RedirectResponse(f"/users?msg={msg}", 302)

@@ -145,6 +145,24 @@
         </div>
       </div>
     </div>
+
+    <!-- DB 백업 / 복원 -->
+    <div class="card mt-3">
+      <div class="card-body" style="font-size:.82rem;">
+        <h6 style="font-size:.85rem; font-weight:700; margin-bottom:10px;"><i class="bi-database me-1"></i>DB 백업 / 복원</h6>
+        <p class="text-muted mb-3" style="font-size:.8rem;">DB 초기화 대비용. 주기적으로 백업 파일을 저장해 두세요.</p>
+        <a href="/backup/download" class="btn btn-sm btn-outline-secondary w-100 mb-2">
+          <i class="bi-download me-1"></i>백업 파일 다운로드
+        </a>
+        <form method="post" action="/backup/restore" enctype="multipart/form-data"
+              onsubmit="return confirm('현재 DB의 모든 데이터가 백업 파일로 교체됩니다.\n계속하시겠습니까?')">
+          <div class="input-group input-group-sm">
+            <input type="file" name="file" class="form-control" accept=".json" required>
+            <button type="submit" class="btn btn-outline-warning">복원</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
