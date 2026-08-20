@@ -237,20 +237,6 @@ def _load_studio_from_gsheet(db):
     ci_price  = COL_NAMES["단가"]
     ci_notes  = COL_NAMES.get("비고")
 
-    # 시트에 있는 연도 미리 파악 → 해당 연도 기존 레코드 삭제 (중복 방지)
-    years_in_sheet = set()
-    last_y = None
-    for row in rows[header_idx + 1:]:
-        raw = str(row[ci_year]).strip() if len(row) > ci_year else ""
-        if raw:
-            try: last_y = int(raw)
-            except: pass
-        if last_y:
-            years_in_sheet.add(last_y)
-    for y in years_in_sheet:
-        db.query(StudioRental).filter_by(year=y).delete(synchronize_session=False)
-    db.commit()
-
     count = 0
     errors = []
     last_year = None
@@ -1290,12 +1276,16 @@ def studio_page(request: Request, year: int = 2026, month: str = "",
 def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session = Depends(get_db)):
     require_admin(request)
     try:
+        # 기존 전체 삭제 후 재삽입 (중복 방지)
+        db.query(StudioRental).delete(synchronize_session=False)
+        db.commit()
         count, detail = _load_studio_from_gsheet(db)
         if count:
             msg = f"구글시트에서 {count}건 복원 완료."
         else:
             msg = f"복원 데이터 없음. ({detail})"
     except Exception as e:
+        db.rollback()
         msg = f"오류: {e}"
     return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
 
