@@ -822,7 +822,8 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             new_shoot = data.pop('_new_shoot')
             new_open  = data.pop('_new_open')
             existing = db.query(Content).filter_by(
-                year=year, course_name=data['course_name']
+                year=year, course_name=data['course_name'],
+                department=data.get('department')
             ).filter(or_(Content.original_code == None, Content.original_code == "")).first()
             if existing:
                 for k, v in data.items():
@@ -976,7 +977,8 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
         for data in without_code:
             shoot_date = data.pop('_shoot_date')
             existing = db.query(Content).filter_by(
-                year=year, course_name=data['course_name']
+                year=year, course_name=data['course_name'],
+                department=data.get('department')
             ).filter(or_(Content.original_code == None, Content.original_code == "")).first()
             if existing:
                 for k, v in data.items():
