@@ -25,13 +25,15 @@ app.add_middleware(SessionMiddleware, secret_key=_secret_key)
 
 @app.exception_handler(Exception)
 async def all_exception_handler(request: Request, exc: Exception):
-    import traceback
+    import traceback, logging as _log
     from fastapi.responses import HTMLResponse
     detail = traceback.format_exc()
-    return HTMLResponse(
-        content=f"<h2 style='color:red'>오류 발생</h2><pre style='background:#f8f8f8;padding:20px'>{detail}</pre>",
-        status_code=500
-    )
+    _log.error(f"[UNHANDLED] {request.method} {request.url}\n{detail}")
+    if os.getenv("ENV") == "development":
+        body = f"<h2 style='color:red'>오류 발생 (개발 모드)</h2><pre style='background:#f8f8f8;padding:20px'>{detail}</pre>"
+    else:
+        body = "<h2 style='color:red'>오류가 발생했습니다</h2><p>잠시 후 다시 시도하거나 관리자에게 문의하세요.</p>"
+    return HTMLResponse(content=body, status_code=500)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 pwd_ctx = CryptContext(schemes=["bcrypt"])
@@ -808,24 +810,36 @@ async def import_gsheet(request: Request, year: int = Form(2026),
                 c.open_date = new_open
                 db.add(c)
 
-        # ── 3단계: 원코드 없는 과정 → 삭제 후 재삽입 ──────
+        # ── 3단계: 원코드 없는 과정 → 과정명 기준 Upsert (PROTECTED 보호) ──────
+        without_code_names = {d['course_name'] for d in without_code}
+        # 시트에서 사라진 과정만 삭제
         db.query(Content).filter_by(year=year).filter(
             or_(Content.original_code == None, Content.original_code == "")
-        ).delete(synchronize_session=False)
+        ).filter(~Content.course_name.in_(without_code_names)).delete(synchronize_session=False)
         db.flush()
 
         for data in without_code:
             new_shoot = data.pop('_new_shoot')
             new_open  = data.pop('_new_open')
-            c = Content(year=year, **data)
-            c.shooting_date = new_shoot
-            c.open_date = new_open
-            db.add(c)
+            existing = db.query(Content).filter_by(
+                year=year, course_name=data['course_name']
+            ).filter(or_(Content.original_code == None, Content.original_code == "")).first()
+            if existing:
+                for k, v in data.items():
+                    if k not in PROTECTED:
+                        setattr(existing, k, v)
+                if new_shoot is not None: existing.shooting_date = new_shoot
+                if new_open  is not None: existing.open_date     = new_open
+            else:
+                c = Content(year=year, **data)
+                c.shooting_date = new_shoot
+                c.open_date = new_open
+                db.add(c)
 
         db.commit()
         msg = (f"구글 시트 동기화 완료 ({year}년) — "
                f"원코드 있음: {len(with_code)}건 upsert, "
-               f"원코드 없음: {len(without_code)}건 재삽입")
+               f"원코드 없음: {len(without_code)}건 upsert")
         if date_parse_errors:
             msg += " ⚠️ 날짜 파싱 실패: " + " / ".join(date_parse_errors)
         return templates.TemplateResponse("import.html", {
@@ -952,23 +966,33 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
                 c.shooting_date = shoot_date
                 db.add(c)
 
-        # ── 3단계: 원코드 없는 과정 → 삭제 후 재삽입 ──────
+        # ── 3단계: 원코드 없는 과정 → 과정명 기준 Upsert (PROTECTED 보호) ──────
+        without_code_names = {d['course_name'] for d in without_code}
         db.query(Content).filter_by(year=year).filter(
             or_(Content.original_code == None, Content.original_code == "")
-        ).delete(synchronize_session=False)
+        ).filter(~Content.course_name.in_(without_code_names)).delete(synchronize_session=False)
         db.flush()
 
         for data in without_code:
             shoot_date = data.pop('_shoot_date')
-            c = Content(year=year, **data)
-            c.shooting_date = shoot_date
-            db.add(c)
+            existing = db.query(Content).filter_by(
+                year=year, course_name=data['course_name']
+            ).filter(or_(Content.original_code == None, Content.original_code == "")).first()
+            if existing:
+                for k, v in data.items():
+                    if k not in PROTECTED:
+                        setattr(existing, k, v)
+                if shoot_date is not None: existing.shooting_date = shoot_date
+            else:
+                c = Content(year=year, **data)
+                c.shooting_date = shoot_date
+                db.add(c)
 
         db.commit()
         imported = len(parsed_rows)
         msg = (f"{imported}건 가져오기 완료 — "
                f"원코드 있음: {len(with_code)}건 upsert, "
-               f"원코드 없음: {len(without_code)}건 재삽입")
+               f"원코드 없음: {len(without_code)}건 upsert")
         msg_type = "success"
     except Exception as e:
         db.rollback()
@@ -1176,20 +1200,27 @@ def price_table_delete(request: Request, pid: int, db: Session = Depends(get_db)
 
 # ── 사용자 관리 (관리자) ──────────────────────────
 @app.get("/users", response_class=HTMLResponse)
-def users_page(request: Request, db: Session = Depends(get_db)):
+def users_page(request: Request, msg: str = "", msg_type: str = "info", db: Session = Depends(get_db)):
     require_admin(request)
     users = db.query(User).order_by(User.role, User.id).all()
-    return templates.TemplateResponse("users.html", {"request": request, "user": get_user(request), "users": users, "msg": ""})
+    return templates.TemplateResponse("users.html", {
+        "request": request, "user": get_user(request),
+        "users": users, "msg": msg, "msg_type": msg_type,
+    })
 
 @app.post("/users/add")
 def users_add(request: Request, username: str=Form(...), name: str=Form(...),
               password: str=Form(...), role: str=Form("director"), db: Session = Depends(get_db)):
     require_admin(request)
+    from urllib.parse import quote as _q
     try:
         db.add(User(username=username, password=pwd_ctx.hash(password), name=name, role=role))
         db.commit()
-    except: pass
-    return RedirectResponse("/users", 302)
+    except Exception as e:
+        db.rollback()
+        err = f"아이디 '{username}'이(가) 이미 존재합니다." if "unique" in str(e).lower() or "duplicate" in str(e).lower() else f"사용자 추가 실패: {e}"
+        return RedirectResponse(f"/users?msg={_q(err)}&msg_type=danger", 302)
+    return RedirectResponse(f"/users?msg={_q(name+' 사용자가 추가되었습니다.')}&msg_type=success", 302)
 
 @app.post("/users/toggle")
 def users_toggle(request: Request, user_id: int=Form(...), db: Session = Depends(get_db)):
@@ -1588,6 +1619,20 @@ async def backup_restore(request: Request, file: UploadFile = File(...)):
                 if key in tables:
                     _restore_table(db, model, tables[key])
                     results[key] = len(tables[key])
+            db.commit()
+            # PostgreSQL sequence 리셋 (복원 후 PK 충돌 방지)
+            from sqlalchemy import text as _sa_text
+            for tbl, col in [
+                ("kicpa_users", "id"), ("kicpa_contents", "id"),
+                ("kicpa_price_table", "id"), ("kicpa_calc_settings", "id"),
+                ("kicpa_studio_rentals", "id"), ("kicpa_customer_contacts", "id"),
+            ]:
+                try:
+                    db.execute(_sa_text(
+                        f"SELECT setval(pg_get_serial_sequence('{tbl}', '{col}'), "
+                        f"COALESCE((SELECT MAX({col}) FROM {tbl}), 1))"
+                    ))
+                except: pass
             db.commit()
             detail = ", ".join(f"{k} {v}건" for k, v in results.items())
             msg = f"복원 완료: {detail}"
