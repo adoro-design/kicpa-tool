@@ -1273,8 +1273,9 @@ def studio_page(request: Request, year: int = 2026, month: str = "",
     })
 
 @app.post("/studio/restore-gsheet")
-def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session = Depends(get_db)):
+def studio_restore_gsheet(request: Request, year: int = Form(2026)):
     require_admin(request)
+    db = SessionLocal()
     try:
         # 기존 전체 삭제 후 재삽입 (중복 방지)
         db.query(StudioRental).delete(synchronize_session=False)
@@ -1287,6 +1288,8 @@ def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session 
     except Exception as e:
         db.rollback()
         msg = f"오류: {e}"
+    finally:
+        db.close()
     return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
 
 
