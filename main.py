@@ -1644,7 +1644,7 @@ async def backup_restore(request: Request, file: UploadFile = File(...)):
             for tbl, col in [
                 ("kicpa_users", "id"), ("kicpa_contents", "id"),
                 ("kicpa_price_table", "id"), ("kicpa_calc_settings", "id"),
-                ("kicpa_studio_rentals", "id"), ("kicpa_customer_contacts", "id"),
+                ("kicpa_studio_rental", "id"), ("kicpa_customer_contacts", "id"),
             ]:
                 try:
                     db.execute(_sa_text(

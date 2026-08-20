@@ -45,8 +45,11 @@ kicpa-tool/
 │   └── tpl_profile.docx     # 프로젝트 프로파일 템플릿
 ├── templates/           # Jinja2 HTML 템플릿
 │   ├── base.html
+│   ├── login.html
+│   ├── error.html
 │   ├── dashboard.html
-│   ├── contents.html / content_edit.html
+│   ├── contents.html
+│   ├── content_edit.html
 │   ├── schedule.html
 │   ├── billing.html
 │   ├── documents.html
@@ -55,7 +58,8 @@ kicpa-tool/
 │   ├── customers.html
 │   ├── price_table.html
 │   ├── calc_settings.html
-│   └── users.html
+│   ├── users.html
+│   └── data.html
 └── static/css/style.css
 ```
 
@@ -112,22 +116,44 @@ kicpa-tool/
 
 | 경로 | 메서드 | 설명 |
 |------|--------|------|
+| `/login` | GET/POST | 로그인 |
+| `/logout` | GET | 로그아웃 |
 | `/` | GET | 대시보드 |
 | `/contents` | GET | 콘텐츠 목록 (필터·페이지네이션) |
-| `/contents/new` | GET/POST | 콘텐츠 등록 |
-| `/contents/{id}/edit` | GET/POST | 콘텐츠 수정 |
+| `/content/edit` | GET | 콘텐츠 등록(`id` 없음) / 수정(`?id={id}`) 폼 |
+| `/content/edit` | POST | 콘텐츠 저장 (등록 또는 수정) |
 | `/schedule` | GET | 촬영 일정 (shooting_date 기준) |
-| `/import` | GET/POST | Excel 파일 업로드 가져오기 |
-| `/import/gsheet` | POST | 구글 시트 동기화 |
 | `/export` | GET | Excel 내보내기 |
+| `/import` | GET | Excel 가져오기 페이지 |
+| `/import` | POST | Excel 파일 업로드 가져오기 |
+| `/import/gsheet` | POST | 구글 시트 동기화 |
 | `/billing` | GET | 정산 관리 |
-| `/documents` | GET/POST | 문서 생성 페이지 |
-| `/generate` | POST | 4종 문서 ZIP 생성·다운로드 |
-| `/studio` | GET/POST | 스튜디오 대관료 관리 |
-| `/customers` | GET/POST | 고객담당자 관리 |
-| `/price_table` | GET/POST | 단가표 관리 |
-| `/calc_settings` | GET/POST | 손익분석서 설정 |
+| `/documents` | GET | 문서 생성 페이지 |
+| `/documents/generate` | POST | 4종 문서 ZIP 생성·다운로드 |
+| `/studio` | GET | 스튜디오 대관료 목록 |
+| `/studio/add` | POST | 스튜디오 대관료 추가 |
+| `/studio/delete/{rid}` | POST | 스튜디오 대관료 삭제 |
+| `/studio/restore-gsheet` | POST | 구글 시트에서 스튜디오 데이터 복원 |
+| `/customers` | GET | 고객담당자 목록 |
+| `/customers/add` | POST | 고객담당자 추가 |
+| `/customers/edit/{cid}` | POST | 고객담당자 수정 |
+| `/customers/delete/{cid}` | POST | 고객담당자 삭제 |
+| `/price_table` | GET | 단가표 관리 |
+| `/price_table/add` | POST | 단가 항목 추가 |
+| `/price_table/update` | POST | 단가 항목 수정 |
+| `/price_table/delete/{pid}` | POST | 단가 항목 삭제 |
+| `/calc_settings` | GET | 손익분석서 설정 |
+| `/calc_settings/add` | POST | 설정값 추가 |
+| `/calc_settings/delete/{sid}` | POST | 설정값 삭제 |
 | `/users` | GET | 사용자 관리 (admin) |
+| `/users/add` | POST | 사용자 추가 (admin) |
+| `/users/toggle` | POST | 사용자 활성/비활성 토글 (admin) |
+| `/users/change_pw` | POST | 비밀번호 변경 (admin) |
+| `/data` | GET | 데이터 관리 — DB 백업·복원, 연도별 데이터 삭제 (admin) |
+| `/backup/download` | GET | DB 전체 백업 JSON 다운로드 (admin) |
+| `/backup/restore` | POST | JSON 파일로 DB 복원 (admin) |
+| `/admin/year-stats` | GET | 연도별 콘텐츠 건수 JSON 반환 (admin) |
+| `/admin/delete-year` | POST | 특정 연도 콘텐츠 전체 삭제 (admin) |
 
 ---
 
@@ -299,7 +325,7 @@ PM 투입비율: 1% 고정. PROD 투입비율: 표준시간 기반 자동 계산
 | director | 대시보드·콘텐츠 목록·촬영일정·정산관리·문서생성·스튜디오 대관 (등록·수정·삭제 가능) |
 | viewer | director와 동일 메뉴 조회만 가능 — 등록·수정·삭제·문서생성 불가 (읽기 전용) |
 
-**Admin 전용**: Excel 가져오기/내보내기, 고객담당자, 단가표 관리, 손익분석서 설정, 사용자 관리
+**Admin 전용**: Excel 가져오기/내보내기, 고객담당자, 단가표 관리, 손익분석서 설정, 사용자 관리, 데이터 관리(백업·복원·연도 삭제)
 
 **권한 함수**: `require_admin` (admin only) / `require_editor` (admin+director) / `require_login` (전체)
 
