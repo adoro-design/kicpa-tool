@@ -190,16 +190,12 @@ def _migrate_audit_contacts():
     finally:
         db.close()
 
-def _load_studio_from_gsheet(db):
-    """구글시트 '스튜디오대관' 시트에서 StudioRental 데이터를 읽어 INSERT.
-    반환값: (성공 건수, 진단 메시지)
-    시트 형식 (1행=제목, 2행=헤더, 3행~=데이터):
-    연도 | 청구월 | 시간수 | 단가 | 합계 | 비고
-    """
+def _fetch_studio_rows_from_gsheet():
+    """구글시트 '스튜디오대관' 시트를 읽어 파싱된 dict 리스트를 반환. DB 작업 없음."""
     from datetime import date as date_cls
     spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
     if not (os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and spreadsheet_id):
-        return 0, "Google API 환경변수 미설정"
+        return [], "Google API 환경변수 미설정"
     import gspread
     from google.oauth2.service_account import Credentials
     SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -215,9 +211,9 @@ def _load_studio_from_gsheet(db):
     ws = spreadsheet.worksheet("스튜디오대관")
     rows = ws.get_all_values()
     if len(rows) < 3:
-        return 0, f"시트 행 수 부족 ({len(rows)}행)"
+        return [], f"시트 행 수 부족 ({len(rows)}행)"
 
-    # 헤더 행에서 컬럼 위치 자동 탐색 (제목행 포함해 최대 5행 이내)
+    # 헤더 행에서 컬럼 위치 자동 탐색
     COL_NAMES = {"연도": None, "청구월": None, "시간수": None, "단가": None, "비고": None}
     header_idx = None
     for ri, row in enumerate(rows[:5]):
@@ -227,18 +223,16 @@ def _load_studio_from_gsheet(db):
         if COL_NAMES["연도"] is not None and COL_NAMES["시간수"] is not None:
             header_idx = ri
             break
-
     if header_idx is None:
-        return 0, f"헤더행을 찾지 못함. 첫 5행: {[r[:4] for r in rows[:5]]}"
+        return [], f"헤더행 없음. 첫 5행: {[r[:4] for r in rows[:5]]}"
 
-    ci_year   = COL_NAMES["연도"]
-    ci_month  = COL_NAMES["청구월"]
-    ci_hours  = COL_NAMES["시간수"]
-    ci_price  = COL_NAMES["단가"]
-    ci_notes  = COL_NAMES.get("비고")
+    ci_year  = COL_NAMES["연도"]
+    ci_month = COL_NAMES["청구월"]
+    ci_hours = COL_NAMES["시간수"]
+    ci_price = COL_NAMES["단가"]
+    ci_notes = COL_NAMES.get("비고")
 
-    count = 0
-    errors = []
+    records, errors = [], []
     last_year = None
     for i, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
         if not any(row):
@@ -249,23 +243,33 @@ def _load_studio_from_gsheet(db):
             if not year_v:
                 continue
             last_year = year_v
-            month_v  = row[ci_month].strip()
-            hours_v  = int(str(row[ci_hours]).replace(",", "").strip())
+            month_v   = row[ci_month].strip()
+            hours_v   = int(str(row[ci_hours]).replace(",", "").strip())
             if hours_v <= 0:
                 continue
-            raw_price = str(row[ci_price]).replace(",", "").strip() if ci_price is not None and len(row) > ci_price else ""
+            raw_price    = str(row[ci_price]).replace(",", "").strip() if ci_price is not None and len(row) > ci_price else ""
             unit_price_v = int(raw_price) if raw_price else 45000
-            notes_v  = row[ci_notes].strip() if ci_notes is not None and len(row) > ci_notes and row[ci_notes].strip() else None
-            month_num = MONTH_ORDER.get(month_v, 0) + 1
-            date_v   = date_cls(year_v, month_num, 1)
-            db.add(StudioRental(year=year_v, month=month_v, usage_date=date_v,
+            notes_v      = row[ci_notes].strip() if ci_notes is not None and len(row) > ci_notes and row[ci_notes].strip() else None
+            month_num    = MONTH_ORDER.get(month_v, 0) + 1
+            date_v       = date_cls(year_v, month_num, 1)
+            records.append(dict(year=year_v, month=month_v, usage_date=date_v,
                                 hours=hours_v, unit_price=unit_price_v, notes=notes_v))
-            count += 1
         except Exception as e:
             errors.append(f"{i}행:{e}")
+
+    detail = f"파싱오류 {len(errors)}건: {'; '.join(errors[:3])}" if errors else f"{len(records)}건 파싱 완료"
+    return records, detail
+
+
+def _load_studio_from_gsheet(db):
+    """구글시트에서 읽은 후 DB에 저장. 반환값: (성공 건수, 진단 메시지)"""
+    records, detail = _fetch_studio_rows_from_gsheet()
+    if not records:
+        return 0, detail
+    for r in records:
+        db.add(StudioRental(**r))
     db.commit()
-    detail = f"파싱오류 {len(errors)}건: {'; '.join(errors[:3])}" if errors else f"총 {len(rows)-header_idx-1}행 읽음"
-    return count, detail
+    return len(records), detail
 
 def _init_studio_rentals():
     """DB 초기화 후 구글시트 '스튜디오대관' 시트에서 자동 복원."""
@@ -1275,21 +1279,27 @@ def studio_page(request: Request, year: int = 2026, month: str = "",
 @app.post("/studio/restore-gsheet")
 def studio_restore_gsheet(request: Request, year: int = Form(2026)):
     require_admin(request)
-    db = SessionLocal()
     try:
-        # 기존 전체 삭제 후 재삽입 (중복 방지)
-        db.query(StudioRental).delete(synchronize_session=False)
-        db.commit()
-        count, detail = _load_studio_from_gsheet(db)
-        if count:
-            msg = f"구글시트에서 {count}건 복원 완료."
-        else:
-            msg = f"복원 데이터 없음. ({detail})"
+        # 1단계: 구글시트 데이터 먼저 읽기 (DB 작업 없음)
+        records, detail = _fetch_studio_rows_from_gsheet()
+        if not records:
+            return RedirectResponse(f"/studio?year={year}&msg=복원 데이터 없음.({detail})", 302)
+        # 2단계: 별도 세션으로 삭제 + 삽입
+        db = SessionLocal()
+        try:
+            db.query(StudioRental).delete(synchronize_session=False)
+            db.flush()
+            for r in records:
+                db.add(StudioRental(**r))
+            db.commit()
+            msg = f"구글시트에서 {len(records)}건 복원 완료."
+        except Exception as e:
+            db.rollback()
+            msg = f"DB 오류: {e}"
+        finally:
+            db.close()
     except Exception as e:
-        db.rollback()
         msg = f"오류: {e}"
-    finally:
-        db.close()
     return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
 
 
