@@ -237,6 +237,20 @@ def _load_studio_from_gsheet(db):
     ci_price  = COL_NAMES["단가"]
     ci_notes  = COL_NAMES.get("비고")
 
+    # 시트에 있는 연도 미리 파악 → 해당 연도 기존 레코드 삭제 (중복 방지)
+    years_in_sheet = set()
+    last_y = None
+    for row in rows[header_idx + 1:]:
+        raw = str(row[ci_year]).strip() if len(row) > ci_year else ""
+        if raw:
+            try: last_y = int(raw)
+            except: pass
+        if last_y:
+            years_in_sheet.add(last_y)
+    for y in years_in_sheet:
+        db.query(StudioRental).filter_by(year=y).delete(synchronize_session=False)
+    db.commit()
+
     count = 0
     errors = []
     last_year = None
@@ -1264,11 +1278,12 @@ def studio_page(request: Request, year: int = 2026, month: str = "",
         monthly[key]["hours"]  += r.hours or 0
         monthly[key]["amount"] += (r.hours or 0) * (r.unit_price or 45000)
     gsheet_ok = bool(os.getenv("GOOGLE_CLIENT_EMAIL") and os.getenv("GOOGLE_PRIVATE_KEY") and os.getenv("GOOGLE_SPREADSHEET_ID"))
+    years = sorted({r.year for r in db.query(StudioRental.year).distinct().all() if r.year}, reverse=True) or [year]
     return templates.TemplateResponse("studio.html", {
         "request": request, "user": get_user(request),
         "year": year, "month": month, "rentals": rentals,
         "months": months, "MONTHS": MONTHS, "monthly": monthly,
-        "gsheet_ok": gsheet_ok, "msg": msg,
+        "gsheet_ok": gsheet_ok, "msg": msg, "years": years,
     })
 
 @app.post("/studio/restore-gsheet")
@@ -1283,6 +1298,8 @@ def studio_restore_gsheet(request: Request, year: int = Form(2026), db: Session 
     except Exception as e:
         msg = f"오류: {e}"
     return RedirectResponse(f"/studio?year={year}&msg={msg}", 302)
+
+
 
 @app.post("/studio/add")
 def studio_add(request: Request, year: int = Form(2026), month: str = Form(""),
