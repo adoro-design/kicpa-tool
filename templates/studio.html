@@ -8,26 +8,28 @@
 {% endif %}
 
 <!-- 필터 바 -->
-<form method="get" action="/studio" class="filter-bar mb-3">
-  <select name="year" class="form-select" style="width:auto;" onchange="this.form.submit()">
-    {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}년</option>{% endfor %}
-  </select>
-  <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
-    <option value="">전체 월</option>
-    {% for m in months %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
-  </select>
-  <button class="btn btn-outline-secondary" type="submit"><i class="bi-search me-1"></i>검색</button>
-  <a href="/studio?year={{ year }}" class="btn btn-outline-secondary">초기화</a>
+<div class="filter-bar mb-3" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+  <form method="get" action="/studio" style="display:contents;">
+    <select name="year" class="form-select" style="width:auto;" onchange="this.form.submit()">
+      {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}년</option>{% endfor %}
+    </select>
+    <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
+      <option value="">전체 월</option>
+      {% for m in months %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-outline-secondary" type="submit"><i class="bi-search me-1"></i>검색</button>
+    <a href="/studio?year={{ year }}" class="btn btn-outline-secondary">초기화</a>
+  </form>
   {% if gsheet_ok and user and user.role == 'admin' %}
-  <form method="post" action="/studio/restore-gsheet" style="display:inline;"
+  <form method="post" action="/studio/restore-gsheet"
         onsubmit="return confirm('구글시트 \'스튜디오대관\' 시트에서 불러옵니다.\n해당 연도 기존 데이터는 삭제됩니다.')">
     <input type="hidden" name="year" value="{{ year }}">
-    <button type="submit" class="btn btn-sm btn-outline-primary ms-2">
+    <button type="submit" class="btn btn-sm btn-outline-primary">
       <i class="bi-cloud-download me-1"></i>구글시트에서 복원
     </button>
   </form>
   {% endif %}
-</form>
+</div>
 
 <!-- 추가 폼 -->
 <div class="form-section mb-3">

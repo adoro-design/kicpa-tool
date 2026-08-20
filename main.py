@@ -1287,12 +1287,14 @@ def studio_restore_gsheet(request: Request, year: int = Form(2026)):
         # 2단계: 별도 세션으로 삭제 + 삽입
         db = SessionLocal()
         try:
+            before = db.query(StudioRental).count()
             db.query(StudioRental).delete(synchronize_session=False)
-            db.flush()
+            db.commit()
             for r in records:
                 db.add(StudioRental(**r))
             db.commit()
-            msg = f"구글시트에서 {len(records)}건 복원 완료."
+            after = db.query(StudioRental).count()
+            msg = f"복원 완료: 삭제 {before}건 → 삽입 {after}건 (시트 파싱 {len(records)}건)"
         except Exception as e:
             db.rollback()
             msg = f"DB 오류: {e}"
