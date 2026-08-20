@@ -30,6 +30,12 @@
       <li class="nav-item"><a class="nav-link {% if '/documents' in request.url.path %}active{% endif %}" href="/documents"><i class="bi-file-earmark-zip"></i> 문서 생성</a></li>
       <li class="nav-item"><a class="nav-link {% if '/studio' in request.url.path %}active{% endif %}" href="/studio"><i class="bi-camera-video"></i> 스튜디오 대관</a></li>
 
+      <!-- 데이터 관리 -->
+      {% if user and user.role == 'admin' %}
+      <li class="nav-section">데이터 관리</li>
+      <li class="nav-item"><a class="nav-link {% if '/data' in request.url.path %}active{% endif %}" href="/data"><i class="bi-database"></i> 백업 · 복원</a></li>
+      {% endif %}
+
       <!-- 설정 -->
       <li class="nav-section">설정</li>
       <li class="nav-item"><a class="nav-link {% if '/import' in request.url.path %}active{% endif %}" href="/import"><i class="bi-upload"></i> Excel 가져오기</a></li>

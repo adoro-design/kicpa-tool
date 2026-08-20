@@ -1581,6 +1581,14 @@ def _restore_table(db, model_class, rows):
             obj[col.name] = val
         db.add(model_class(**obj))
 
+@app.get("/data", response_class=HTMLResponse)
+def data_page(request: Request, msg: str = "", msg_type: str = "info"):
+    require_admin(request)
+    return templates.TemplateResponse("data.html", {
+        "request": request, "user": get_user(request),
+        "msg": msg, "msg_type": msg_type,
+    })
+
 @app.get("/backup/download")
 def backup_download(request: Request):
     require_admin(request)
@@ -1654,7 +1662,7 @@ async def backup_restore(request: Request, file: UploadFile = File(...)):
             db.close()
     except Exception as e:
         msg = f"파일 읽기 오류: {e}"
-    return RedirectResponse(f"/users?msg={msg}", 302)
+    return RedirectResponse(f"/data?msg={msg}", 302)
 
 # ── 연도별 데이터 관리 ────────────────────────────
 @app.get("/admin/year-stats")
@@ -1678,4 +1686,4 @@ def admin_delete_year(request: Request, year: int = Form(...), db: Session = Dep
     except Exception as e:
         db.rollback()
         msg = f"삭제 오류: {e}"
-    return RedirectResponse(f"/users?msg={_q(msg)}&msg_type=success", 302)
+    return RedirectResponse(f"/data?msg={_q(msg)}&msg_type=success", 302)
