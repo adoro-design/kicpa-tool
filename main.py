@@ -142,6 +142,30 @@ def startup():
             db.commit()
     except Exception:
         pass
+    # 고객담당자 초기 데이터 (DB 초기화 후 자동 복원)
+    _init_customer_contacts()
+
+def _init_customer_contacts():
+    CONTACTS = [
+        dict(department="회계연수원",      contact_name="김재준", phone="02-3149-0322", email="burnett@kicpa.kr",   note="청구는 이승희 책임, 이연주 담당(ESG)"),
+        dict(department="조세지원본부",     contact_name="서미혜", phone="02-3149-0349", email="myesound@kicpa.kr",  note=None),
+        dict(department="지속가능성본부",   contact_name="김예지", phone="02-3149-0186", email="qhfl5260@kicpa.kr",  note=None),
+        dict(department="공공비영리본부",   contact_name="박희림", phone="02-3149-0317", email="hrpark@kicpa.kr",    note=None),
+        dict(department="감사인증기준본부-1", contact_name="박상현", phone="02-3149-0337", email="spark13@kicpa.kr",  note=None),
+        dict(department="감사인증기준본부-2", contact_name="김지연", phone="02-3149-0184", email="dela82@kicpa.kr",   note=None),
+        dict(department="재무보고본부",     contact_name="이정호", phone="02-3149-0313", email="hiloo7870@kicpa.kr", note="정산자료는 회계연수원에 포함하여 작성됨."),
+    ]
+    try:
+        db = SessionLocal()
+        existing = db.query(CustomerContact).count()
+        if existing == 0:
+            for c in CONTACTS:
+                db.add(CustomerContact(**c))
+            db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 # ── 인증 ────────────────────────────────────────
 @app.get("/login", response_class=HTMLResponse)
