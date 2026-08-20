@@ -188,6 +188,7 @@ fetch('/admin/year-stats').then(r => r.json()).then(data => {
   const sel = document.getElementById('del-year-select');
   if (!data.length) { el.textContent = '데이터 없음'; return; }
   el.innerHTML = data.map(d => `<span class="me-3">${d.year}년: <strong>${d.count}건</strong></span>`).join('');
+  sel.innerHTML = '';
   data.forEach(d => {
     const opt = document.createElement('option');
     opt.value = d.year; opt.textContent = `${d.year}년 (${d.count}건)`;
