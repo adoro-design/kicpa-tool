@@ -150,7 +150,7 @@ kicpa-tool/
 | `/users/toggle` | POST | 사용자 활성/비활성 토글 (admin) |
 | `/users/change_pw` | POST | 비밀번호 변경 (admin) |
 | `/data` | GET | 데이터 관리 — DB 백업·복원, 연도별 데이터 삭제 (admin) |
-| `/backup/download` | GET | DB 전체 백업 JSON 다운로드 (admin) |
+| `/backup/download` | GET | DB 전체 백업 JSON 다운로드 (admin) — 저장 위치: `D:\Work\P08.AI\04.한공회콘텐츠관리Tool\03.Data백업` |
 | `/backup/restore` | POST | JSON 파일로 DB 복원 (admin) |
 | `/admin/year-stats` | GET | 연도별 콘텐츠 건수 JSON 반환 (admin) |
 | `/admin/delete-year` | POST | 특정 연도 콘텐츠 전체 삭제 (admin) |
