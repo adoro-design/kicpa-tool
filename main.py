@@ -458,9 +458,10 @@ def contents(request: Request, year: int = 2026, dept: str = "", month: str = ""
 
     depts   = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
     formats = [f[0] for f in db.query(Content.shooting_format).filter_by(year=year).filter(Content.shooting_format != None).distinct().all()]
+    years   = sorted([y[0] for y in db.query(Content.year).distinct().all()], reverse=True) or [2026]
     return templates.TemplateResponse("contents.html", {
         "request": request, "user": get_user(request),
-        "year": year, "rows": rows, "total": total, "page": page, "total_pages": total_pages,
+        "year": year, "years": years, "rows": rows, "total": total, "page": page, "total_pages": total_pages,
         "depts": depts, "formats": formats,
         "dept": dept, "month": month, "fmt": fmt, "billing": billing, "search": search,
     })
@@ -563,9 +564,10 @@ def schedule(request: Request, year: int = 2026, month: str = "", dept: str = ""
         key = r.shooting_date.isoformat()
         grouped.setdefault(key, []).append(r)
     depts = [d[0] for d in db.query(Content.department).filter_by(year=year).filter(Content.department != None).distinct().order_by(Content.department).all()]
+    years = sorted([y[0] for y in db.query(Content.year).distinct().all()], reverse=True) or [2026]
     return templates.TemplateResponse("schedule.html", {
         "request": request, "user": get_user(request),
-        "year": year, "grouped": grouped, "month": month, "dept": dept, "depts": depts,
+        "year": year, "years": years, "grouped": grouped, "month": month, "dept": dept, "depts": depts,
     })
 
 # ── Excel 내보내기 ─────────────────────────────────
@@ -1090,9 +1092,10 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     # 비용청구 월 목록 (실제 데이터 기준)
     billing_months = [m[0] for m in db.query(Content.billing_month).filter_by(year=year).filter(Content.billing_month != None).distinct().all()]
     billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
+    years = sorted([y[0] for y in db.query(Content.year).distinct().all()], reverse=True) or [2026]
     return templates.TemplateResponse("billing.html", {
         "request": request, "user": get_user(request),
-        "year": year, "contents": contents, "summary": summary,
+        "year": year, "years": years, "contents": contents, "summary": summary,
         "month": month, "dept": dept, "depts": depts,
         "billing_months": billing_months,
         "get_price": get_price, "get_unit_price": get_unit_price,
@@ -1651,3 +1654,27 @@ async def backup_restore(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         msg = f"파일 읽기 오류: {e}"
     return RedirectResponse(f"/users?msg={msg}", 302)
+
+# ── 연도별 데이터 관리 ────────────────────────────
+@app.get("/admin/year-stats")
+def admin_year_stats(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
+    from sqlalchemy import func as _func
+    rows = db.query(Content.year, _func.count(Content.id)).group_by(Content.year).order_by(Content.year).all()
+    stats = [{"year": y, "count": c} for y, c in rows]
+    import json as _j
+    return HTMLResponse(_j.dumps(stats, ensure_ascii=False), media_type="application/json")
+
+@app.post("/admin/delete-year")
+def admin_delete_year(request: Request, year: int = Form(...), db: Session = Depends(get_db)):
+    require_admin(request)
+    from urllib.parse import quote as _q
+    try:
+        count = db.query(Content).filter_by(year=year).count()
+        db.query(Content).filter_by(year=year).delete(synchronize_session=False)
+        db.commit()
+        msg = f"{year}년 콘텐츠 {count}건 삭제 완료"
+    except Exception as e:
+        db.rollback()
+        msg = f"삭제 오류: {e}"
+    return RedirectResponse(f"/users?msg={_q(msg)}&msg_type=success", 302)

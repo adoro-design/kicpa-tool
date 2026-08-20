@@ -146,6 +146,21 @@
       </div>
     </div>
 
+    <!-- 연도별 데이터 관리 -->
+    <div class="card mt-3">
+      <div class="card-body" style="font-size:.82rem;">
+        <h6 style="font-size:.85rem; font-weight:700; margin-bottom:10px;"><i class="bi-calendar3 me-1"></i>연도별 콘텐츠 데이터</h6>
+        <div id="year-stats" class="mb-3 text-muted" style="font-size:.8rem;">불러오는 중...</div>
+        <form method="post" action="/admin/delete-year"
+              onsubmit="return confirm('해당 연도의 콘텐츠 데이터를 전부 삭제합니다.\n되돌릴 수 없습니다. 계속하시겠습니까?')">
+          <div class="input-group input-group-sm">
+            <select name="year" class="form-select" id="del-year-select"></select>
+            <button type="submit" class="btn btn-outline-danger">삭제</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- DB 백업 / 복원 -->
     <div class="card mt-3">
       <div class="card-body" style="font-size:.82rem;">
@@ -165,4 +180,20 @@
     </div>
   </div>
 </div>
+
+{% block scripts %}
+<script>
+fetch('/admin/year-stats').then(r => r.json()).then(data => {
+  const el  = document.getElementById('year-stats');
+  const sel = document.getElementById('del-year-select');
+  if (!data.length) { el.textContent = '데이터 없음'; return; }
+  el.innerHTML = data.map(d => `<span class="me-3">${d.year}년: <strong>${d.count}건</strong></span>`).join('');
+  data.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.year; opt.textContent = `${d.year}년 (${d.count}건)`;
+    sel.appendChild(opt);
+  });
+}).catch(() => { document.getElementById('year-stats').textContent = '로드 실패'; });
+</script>
+{% endblock %}
 {% endblock %}

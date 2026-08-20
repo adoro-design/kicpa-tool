@@ -15,7 +15,9 @@
 {% block content %}
 <!-- 필터 -->
 <form method="get" action="/contents" class="filter-bar">
-  <input type="hidden" name="year" value="{{ year }}">
+  <select name="year" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}년</option>{% endfor %}
+  </select>
   <select name="dept" class="form-select" style="width:auto;" onchange="this.form.submit()">
     <option value="">전체 부서</option>
     {% for d in depts %}<option value="{{ d }}" {% if d==dept %}selected{% endif %}>{{ d }}</option>{% endfor %}

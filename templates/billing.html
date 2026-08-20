@@ -8,7 +8,9 @@
 {% block content %}
 <!-- 필터 -->
 <form method="get" action="/billing" class="filter-bar">
-  <input type="hidden" name="year" value="{{ year }}">
+  <select name="year" class="form-select" style="width:auto;" onchange="this.form.submit()">
+    {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}년</option>{% endfor %}
+  </select>
   <select name="month" class="form-select" style="width:auto;" onchange="this.form.submit()">
     <option value="">전체 청구월</option>
     {% for m in billing_months %}<option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m | normalize_month }}</option>{% endfor %}
