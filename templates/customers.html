@@ -16,6 +16,10 @@
         </datalist>
       </div>
       <div class="col-md-2">
+        <label class="form-label">한공회 담당 <small class="text-muted">(분리생성용)</small></label>
+        <input type="text" name="kicpa_manager" class="form-control" placeholder="예: 박상현">
+      </div>
+      <div class="col-md-2">
         <label class="form-label">담당자명</label>
         <input type="text" name="contact_name" class="form-control" placeholder="홍길동">
       </div>
@@ -49,6 +53,7 @@
     <thead>
       <tr>
         <th>부서명</th>
+        <th>한공회 담당</th>
         <th>담당자명</th>
         <th>전화번호</th>
         <th>이메일</th>
@@ -60,6 +65,7 @@
       {% for c in contacts %}
       <tr id="row-{{ c.id }}">
         <td style="font-size:.84rem;">{{ c.department }}</td>
+        <td style="font-size:.84rem;">{{ c.kicpa_manager or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.contact_name or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.phone or '-' }}</td>
         <td style="font-size:.84rem;">{{ c.email or '-' }}</td>
@@ -67,7 +73,7 @@
         <td>
           <div style="display:flex; gap:4px; white-space:nowrap;">
             <button class="btn btn-xs btn-outline-secondary {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor" style="font-size:.75rem; padding:2px 8px;"
-              {% if user and user.role != 'viewer' %}onclick="openEdit({{ c.id }}, '{{ c.department }}', '{{ c.contact_name or '' }}', '{{ c.phone or '' }}', '{{ c.email or '' }}', '{{ c.note or '' }}')"{% endif %}>수정</button>
+              {% if user and user.role != 'viewer' %}onclick="openEdit({{ c.id }}, '{{ c.department }}', '{{ c.kicpa_manager or '' }}', '{{ c.contact_name or '' }}', '{{ c.phone or '' }}', '{{ c.email or '' }}', '{{ c.note or '' }}')"{% endif %}>수정</button>
             <form method="post" action="/customers/delete/{{ c.id }}" style="display:inline;"
               onsubmit="return confirm('삭제하시겠습니까?')">
               <button type="submit" class="btn btn-xs btn-outline-danger {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor" style="font-size:.75rem; padding:2px 8px;">삭제</button>
@@ -76,7 +82,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="text-center py-4 text-muted">등록된 담당자가 없습니다.</td></tr>
+      <tr><td colspan="7" class="text-center py-4 text-muted">등록된 담당자가 없습니다.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -95,6 +101,10 @@
           <div class="mb-3">
             <label class="form-label">부서명</label>
             <input type="text" name="department" id="edit_dept" class="form-control" list="dept-list">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">한공회 담당 <small class="text-muted">(분리생성용)</small></label>
+            <input type="text" name="kicpa_manager" id="edit_manager" class="form-control" placeholder="예: 박상현">
           </div>
           <div class="mb-3">
             <label class="form-label">담당자명</label>
@@ -124,13 +134,14 @@
 
 {% block scripts %}
 <script>
-function openEdit(id, dept, name, phone, email, note) {
-  document.getElementById('editForm').action = '/customers/edit/' + id;
-  document.getElementById('edit_dept').value  = dept;
-  document.getElementById('edit_name').value  = name;
-  document.getElementById('edit_phone').value = phone;
-  document.getElementById('edit_email').value = email;
-  document.getElementById('edit_note').value  = note;
+function openEdit(id, dept, manager, name, phone, email, note) {
+  document.getElementById('editForm').action    = '/customers/edit/' + id;
+  document.getElementById('edit_dept').value    = dept;
+  document.getElementById('edit_manager').value = manager;
+  document.getElementById('edit_name').value    = name;
+  document.getElementById('edit_phone').value   = phone;
+  document.getElementById('edit_email').value   = email;
+  document.getElementById('edit_note').value    = note;
   new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 </script>

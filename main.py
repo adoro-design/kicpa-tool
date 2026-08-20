@@ -151,8 +151,8 @@ def _init_customer_contacts():
         dict(department="조세지원본부",     contact_name="서미혜", phone="02-3149-0349", email="myesound@kicpa.kr",  note=None),
         dict(department="지속가능성본부",   contact_name="김예지", phone="02-3149-0186", email="qhfl5260@kicpa.kr",  note=None),
         dict(department="공공비영리본부",   contact_name="박희림", phone="02-3149-0317", email="hrpark@kicpa.kr",    note=None),
-        dict(department="감사인증기준본부-1", contact_name="박상현", phone="02-3149-0337", email="spark13@kicpa.kr",  note=None),
-        dict(department="감사인증기준본부-2", contact_name="김지연", phone="02-3149-0184", email="dela82@kicpa.kr",   note=None),
+        dict(department="감사인증기준본부", kicpa_manager="박상현", contact_name="박상현", phone="02-3149-0337", email="spark13@kicpa.kr",  note=None),
+        dict(department="감사인증기준본부", kicpa_manager="김지연", contact_name="김지연", phone="02-3149-0184", email="dela82@kicpa.kr",   note=None),
         dict(department="재무보고본부",     contact_name="이정호", phone="02-3149-0313", email="hiloo7870@kicpa.kr", note="정산자료는 회계연수원에 포함하여 작성됨."),
     ]
     try:
@@ -1095,29 +1095,34 @@ def customers_page(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/customers/add")
 def customers_add(request: Request,
-    department: str = Form(""), contact_name: str = Form(""),
-    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    department: str = Form(""), kicpa_manager: str = Form(""),
+    contact_name: str = Form(""), phone: str = Form(""),
+    email: str = Form(""), note: str = Form(""),
     db: Session = Depends(get_db)):
     require_admin(request)
     if department:
-        db.add(CustomerContact(department=department, contact_name=contact_name or None,
+        db.add(CustomerContact(department=department,
+            kicpa_manager=kicpa_manager or None,
+            contact_name=contact_name or None,
             phone=phone or None, email=email or None, note=note or None))
         db.commit()
     return RedirectResponse("/customers", 302)
 
 @app.post("/customers/edit/{cid}")
 def customers_edit(request: Request, cid: int,
-    department: str = Form(""), contact_name: str = Form(""),
-    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
+    department: str = Form(""), kicpa_manager: str = Form(""),
+    contact_name: str = Form(""), phone: str = Form(""),
+    email: str = Form(""), note: str = Form(""),
     db: Session = Depends(get_db)):
     require_admin(request)
     c = db.query(CustomerContact).filter_by(id=cid).first()
     if c:
-        c.department = department or c.department
-        c.contact_name = contact_name or None
-        c.phone = phone or None
-        c.email = email or None
-        c.note = note or None
+        c.department    = department or c.department
+        c.kicpa_manager = kicpa_manager or None
+        c.contact_name  = contact_name or None
+        c.phone         = phone or None
+        c.email         = email or None
+        c.note          = note or None
         db.commit()
     return RedirectResponse("/customers", 302)
 
@@ -1236,13 +1241,86 @@ def documents_generate(request: Request, year: int = Form(2026),
         max_dept       = max(all_depts, key=dept_revenue) if all_depts else dept
         include_studio = (dept == max_dept)
 
-        customer = db.query(CustomerContact).filter_by(department=dept, is_active=True).first()
+        contacts = db.query(CustomerContact).filter_by(department=dept, is_active=True).all()
 
-        zip_bytes = docgen.generate_all(
-            courses=courses, dept=dept, month_str=month, year=year,
-            price_tbl=price_tbl, studio_hours=studio_hours,
-            include_studio=include_studio, customer_contact=customer,
-            calc_settings=calc_cfg)
+        if len(contacts) > 1:
+            # 부서에 담당자가 여럿 → kicpa_manager 기준으로 분리 생성
+            from collections import defaultdict
+
+            # calc_settings 전역 적용 (generate_all과 동일)
+            if calc_cfg:
+                docgen.WORK_HOURS_PER_SESSION['default']      = calc_cfg.get('work_hours_chromakey', 2.5)
+                docgen.WORK_HOURS_PER_SESSION['porting']      = calc_cfg.get('work_hours_porting', 0.5)
+                docgen.WORK_HOURS_PER_SESSION['edit_porting'] = calc_cfg.get('work_hours_edit_porting', 1.0)
+                docgen.WORK_HOURS_PER_SESSION['travel']       = calc_cfg.get('work_hours_travel', 3.5)
+                docgen.TARGET_PROFIT = calc_cfg.get('target_profit_pct', 30.0) / 100
+
+            mn_num   = docgen.get_month_number(month)
+            write_dt = docgen.get_last_business_day(year, mn_num)
+            mm_str   = f"{mn_num:02d}월"
+            mmdd     = write_dt.strftime('%m%d')
+
+            # 과정을 kicpa_manager별로 그룹화
+            groups = defaultdict(list)
+            for c in courses:
+                groups[c.kicpa_manager or ""].append(c)
+
+            # 담당자 연락처 맵
+            contact_map = {cc.kicpa_manager: cc for cc in contacts}
+
+            # 서브그룹 매출 (스튜디오 배분 기준)
+            tr_rate = price_tbl.get("1 ~ 4시간", 100000)
+            def subgroup_rev(grp):
+                return sum(
+                    docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
+                    + docgen.get_travel_for(c, tr_rate)
+                    for c in grp
+                )
+            max_manager = max(groups, key=lambda m: subgroup_rev(groups[m])) if groups else None
+
+            # 부서 전체 기준 P&L 공통값 계산
+            all_revenue = docgen.calc_revenue(courses, price_tbl)
+            full_ps, full_pe = docgen.calc_period(courses, year, mn_num)
+
+            buf_out = io.BytesIO()
+            with zipfile.ZipFile(buf_out, "w", zipfile.ZIP_DEFLATED) as zf:
+                for manager, grp_courses in groups.items():
+                    if not grp_courses:
+                        continue
+                    contact = contact_map.get(manager)
+                    sub_include_studio = include_studio and (manager == max_manager)
+                    studio_a = studio_hours * docgen.STUDIO_UNIT_PRICE if sub_include_studio else 0
+
+                    pm_rate, prod_rate = docgen.adjust_rates(
+                        all_revenue, studio_a, full_ps, full_pe, courses=courses)
+
+                    # 손익분석서: 부서 전체 과정 기준
+                    pnl = docgen.gen_pnl_excel(
+                        courses, dept, month, year, price_tbl,
+                        studio_hours, sub_include_studio, pm_rate, prod_rate)
+
+                    # 개발요청서: 서브그룹 과정만
+                    rx = docgen.gen_devreq_excel(grp_courses, dept, month, year, price_tbl)
+                    sub_ps, sub_pe = docgen.calc_period(grp_courses, year, mn_num)
+                    rd = docgen.gen_devreq_docx(grp_courses, dept, month, year, sub_ps, sub_pe, write_dt)
+                    prof = docgen.gen_profile_docx(
+                        grp_courses, dept, month, year, price_tbl,
+                        studio_hours, sub_include_studio,
+                        pm_rate, prod_rate, contact)
+
+                    prefix = f"{manager}/"
+                    zf.writestr(f"{prefix}손익분석서_한국공인회계사회_{mm_str}_V1.0_{mmdd}_{dept}.xlsx", pnl)
+                    zf.writestr(f"{prefix}프로젝트프로파일_한국공인회계사회_{mm_str}_V0.1_{mmdd}_{dept}.docx", prof)
+                    zf.writestr(f"{prefix}한공회_{year}년{mn_num:02d}월분_컨텐츠개발요청서_{dept}.docx", rd)
+                    zf.writestr(f"{prefix}한공회_{year}년{mn_num:02d}월분_컨텐츠개발요청서_제출시첨부사항_{dept}.xlsx", rx)
+            zip_bytes = buf_out.getvalue()
+        else:
+            customer = contacts[0] if contacts else None
+            zip_bytes = docgen.generate_all(
+                courses=courses, dept=dept, month_str=month, year=year,
+                price_tbl=price_tbl, studio_hours=studio_hours,
+                include_studio=include_studio, customer_contact=customer,
+                calc_settings=calc_cfg)
 
     except Exception as e:
         err_detail = traceback.format_exc()
@@ -1261,51 +1339,6 @@ def documents_generate(request: Request, year: int = Form(2026),
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
     )
-# ── 고객담당자 관리 ───────────────────────────────
-@app.get("/customers", response_class=HTMLResponse)
-def customers_page(request: Request, db: Session = Depends(get_db)):
-    require_login(request)
-    contacts = db.query(CustomerContact).order_by(CustomerContact.department).all()
-    depts = [d[0] for d in db.query(Content.department).filter(Content.department != None).distinct().order_by(Content.department).all()]
-    return templates.TemplateResponse("customers.html", {
-        "request": request, "user": get_user(request),
-        "contacts": contacts, "depts": depts, "msg": "",
-    })
-
-@app.post("/customers/add")
-def customers_add(request: Request,
-    department: str = Form(""), contact_name: str = Form(""),
-    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
-    db: Session = Depends(get_db)):
-    require_admin(request)
-    if department:
-        db.add(CustomerContact(department=department, contact_name=contact_name or None,
-            phone=phone or None, email=email or None, note=note or None))
-        db.commit()
-    return RedirectResponse("/customers", 302)
-
-@app.post("/customers/edit/{cid}")
-def customers_edit(request: Request, cid: int,
-    department: str = Form(""), contact_name: str = Form(""),
-    phone: str = Form(""), email: str = Form(""), note: str = Form(""),
-    db: Session = Depends(get_db)):
-    require_admin(request)
-    c = db.query(CustomerContact).filter_by(id=cid).first()
-    if c:
-        c.department = department or c.department
-        c.contact_name = contact_name or None
-        c.phone = phone or None
-        c.email = email or None
-        c.note = note or None
-        db.commit()
-    return RedirectResponse("/customers", 302)
-
-@app.post("/customers/delete/{cid}")
-def customers_delete(request: Request, cid: int, db: Session = Depends(get_db)):
-    require_admin(request)
-    db.query(CustomerContact).filter_by(id=cid).delete()
-    db.commit()
-    return RedirectResponse("/customers", 302)
 
 # ── 스튜디오 대관료 관리 ──────────────────────────
 @app.get("/studio", response_class=HTMLResponse)

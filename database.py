@@ -117,14 +117,15 @@ class StudioRental(Base):
 
 class CustomerContact(Base):
     __tablename__ = "kicpa_customer_contacts"
-    id           = Column(Integer, primary_key=True, index=True)
-    department   = Column(String(100), nullable=False, index=True)
-    contact_name = Column(String(100))
-    phone        = Column(String(50))
-    email        = Column(String(200))
-    note         = Column(String(200))
-    is_active    = Column(Boolean, default=True)
-    created_at   = Column(DateTime, server_default=func.now())
+    id            = Column(Integer, primary_key=True, index=True)
+    department    = Column(String(100), nullable=False, index=True)
+    kicpa_manager = Column(String(100))
+    contact_name  = Column(String(100))
+    phone         = Column(String(50))
+    email         = Column(String(200))
+    note          = Column(String(200))
+    is_active     = Column(Boolean, default=True)
+    created_at    = Column(DateTime, server_default=func.now())
 
 def init_db():
     if os.getenv("RESET_DB") == "true":
@@ -138,6 +139,7 @@ def init_db():
         "ALTER TABLE kicpa_contents ADD COLUMN travel_days INTEGER",
         "ALTER TABLE kicpa_contents ADD COLUMN travel_expense INTEGER",
         "ALTER TABLE kicpa_price_table ADD COLUMN effective_from DATE",
+        "ALTER TABLE kicpa_customer_contacts ADD COLUMN kicpa_manager VARCHAR(100)",
     ]:
         try:
             with engine.connect() as conn:
