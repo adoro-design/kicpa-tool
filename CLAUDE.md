@@ -355,7 +355,7 @@ Render.com 무료 플랜은 PostgreSQL DB가 비활성 상태 지속 시 초기�
 
 ### 자동 백업
 - **Windows 작업 스케줄러**로 매주 금요일 오전 10시 자동 실행 (`KICPA_AutoBackup` 작업)
-- 스크립트: `D:\Work\P08.AI\04.한공회콘텐츠관리Tool\03.Data백업\kicpa_auto_backup.py`
+- 스크립트: `D:\Work\P08.AI\04.한공회콘텐츠관리Tool\03.Data백업\kicpa_auto_backup.ps1`
 - `/backup/auto?token=BACKUP_TOKEN` 엔드포인트 호출 → JSON 저장 (토큰은 Render 환경변수 `BACKUP_TOKEN`에 설정)
 - PC가 켜져 있으면 Cowork 실행 여부와 무관하게 동작
 
