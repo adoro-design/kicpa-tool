@@ -1589,6 +1589,39 @@ def data_page(request: Request, msg: str = "", msg_type: str = "info"):
         "msg": msg, "msg_type": msg_type,
     })
 
+_backup_token = os.getenv("BACKUP_TOKEN", "")
+
+@app.get("/backup/auto")
+def backup_auto(token: str = ""):
+    """세션 인증 없이 토큰으로 접근하는 자동 백업용 엔드포인트."""
+    if not _backup_token or token != _backup_token:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid token")
+    from datetime import datetime as _dt
+    db = SessionLocal()
+    try:
+        backup = {
+            "created_at": _dt.now().isoformat(),
+            "version": "1",
+            "tables": {
+                "users":             [_row_to_dict(r) for r in db.query(User).all()],
+                "contents":          [_row_to_dict(r) for r in db.query(Content).all()],
+                "price_table":       [_row_to_dict(r) for r in db.query(PriceTable).all()],
+                "calc_settings":     [_row_to_dict(r) for r in db.query(CalcSettings).all()],
+                "studio_rentals":    [_row_to_dict(r) for r in db.query(StudioRental).all()],
+                "customer_contacts": [_row_to_dict(r) for r in db.query(CustomerContact).all()],
+            }
+        }
+    finally:
+        db.close()
+    json_bytes = _json.dumps(backup, ensure_ascii=False, indent=2).encode("utf-8")
+    ts = _dt.now().strftime('%Y%m%d_%H%M%S')
+    return StreamingResponse(
+        io.BytesIO(json_bytes),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=kicpa_backup_{ts}.json"}
+    )
+
 @app.get("/backup/download")
 def backup_download(request: Request):
     require_admin(request)
