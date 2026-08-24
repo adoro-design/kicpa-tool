@@ -1655,7 +1655,7 @@ async def backup_restore(request: Request, file: UploadFile = File(...)):
     require_admin(request)
     try:
         content = await file.read()
-        backup = _json.loads(content.decode("utf-8"))
+        backup = _json.loads(content.decode("utf-8-sig"))  # BOM 포함 파일도 처리
         tables = backup.get("tables", {})
         db = SessionLocal()
         results = {}
