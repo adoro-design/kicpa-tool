@@ -6,9 +6,9 @@
 매달 반복되던 Excel 수작업(손익분석서·개발요청서 등)을 자동화하고, 구글 시트 연동으로 실시간 데이터 관리를 지원한다.
 
 - **사이트명**: KICPA 콘텐츠 정산 관리
-- **배포 환경**: Render.com (Web Service + PostgreSQL)
+- **배포 환경**: Render.com (Web Service) + **Neon** (PostgreSQL)
 - **저장소**: GitHub Private (main 브랜치 push → 자동 배포)
-- **로컬 개발**: SQLite (`kicpa.db`), 배포 환경은 PostgreSQL
+- **로컬 개발**: SQLite (`kicpa.db`), 배포 환경은 PostgreSQL (Neon)
 
 ---
 
@@ -23,7 +23,7 @@
 | 구글 시트 | gspread 6.1, google-auth 2.29 (Service Account) |
 | 인증 | passlib[bcrypt], itsdangerous (세션 쿠키) |
 | 프론트 | Chart.js 4.4.0, Bootstrap Icons, Iconify |
-| 배포 | Render.com, Procfile, runtime.txt |
+| 배포 | Render.com (Web), Neon (PostgreSQL), Procfile, runtime.txt |
 
 ---
 
@@ -336,8 +336,10 @@ PM 투입비율: 1% 고정. PROD 투입비율: 표준시간 기반 자동 계산
 ## DB 백업 및 복원
 
 ### 배경
-Render.com 무료 플랜은 PostgreSQL DB가 비활성 상태 지속 시 초기화될 수 있다.
-초기화 시 시드 데이터(기본 계정·단가표·설정값)는 자동 복구되지만, 아래 데이터는 **영구 소실**된다.
+기존 Render.com 무료 PostgreSQL은 90일 후 자동 만료·삭제되는 문제로 **2026-08-24 Neon으로 이전**했다.
+Neon 무료 플랜은 데이터 만료 없이 영구 유지된다. DB 연결 정보는 Render `DATABASE_URL` 환경변수에 설정되어 있다.
+
+DB 초기화 시 시드 데이터(기본 계정·단가표·설정값)는 자동 복구되지만, 아래 데이터는 **영구 소실**된다.
 
 - 콘텐츠 목록 전체 (과정명·촬영일·정산 현황 등)
 - 수동 입력한 별도 단가 (`custom_price`), 출장비 (`travel_expense`)
@@ -391,7 +393,7 @@ Render.com 무료 플랜은 PostgreSQL DB가 비활성 상태 지속 시 초기�
 ## 환경변수
 
 ```
-DATABASE_URL=postgresql://...       # Render PostgreSQL URL
+DATABASE_URL=postgresql://...       # Neon PostgreSQL Connection string (neon.tech)
 SECRET_KEY=임의의_시크릿키
 RESET_DB=false                      # true로 설정 시 DB 초기화 (위험)
 GOOGLE_CLIENT_EMAIL=...             # 구글 서비스 계정 이메일
