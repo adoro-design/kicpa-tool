@@ -510,7 +510,7 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     dev_outsource_date: str=Form(""), inspection_date: str=Form(""), open_date: str=Form(""),
     billing: str=Form(""), billing_month: str=Form(""), custom_price: str=Form(""),
     travel_hours: str=Form(""), travel_days: str=Form(""), travel_expense: str=Form(""),
-    notes: str=Form(""), db: Session = Depends(get_db)):
+    thumbnail_yn: str=Form(""), notes: str=Form(""), db: Session = Depends(get_db)):
     require_editor(request)
 
     def to_date(s):
@@ -536,7 +536,9 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
         custom_price=to_int(custom_price),
         travel_hours=to_int(travel_hours),
         travel_days=to_int(travel_days),
-        travel_expense=to_int(travel_expense), notes=notes or None)
+        travel_expense=to_int(travel_expense),
+        thumbnail_yn=(thumbnail_yn == "Y"),
+        notes=notes or None)
 
     if id:
         db.query(Content).filter_by(id=id).update(data)
@@ -707,7 +709,7 @@ async def import_gsheet(request: Request, year: int = Form(2026),
 
         # ── 1단계: 전체 행 파싱 ──────────────────────────
         # 수동 입력 필드 — sync 시 절대 덮어쓰지 않음
-        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense'}
+        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense', 'thumbnail_yn'}
 
         prev_month = ""
         parsed_rows = []
@@ -875,7 +877,7 @@ async def import_excel(request: Request, year: int = Form(2026), import_mode: st
         ws = wb["개발관리"] if "개발관리" in wb.sheetnames else wb.active
 
         # 수동 입력 필드 — sync 시 절대 덮어쓰지 않음
-        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense'}
+        PROTECTED = {'custom_price', 'travel_hours', 'travel_days', 'travel_expense', 'thumbnail_yn'}
 
         def to_date(v):
             if v is None: return None

@@ -69,6 +69,7 @@ class Content(Base):
     travel_hours        = Column(Integer)
     travel_days         = Column(Integer)
     travel_expense      = Column(Integer)
+    thumbnail_yn        = Column(Boolean, default=False)
     notes               = Column(Text)
     created_at          = Column(DateTime, server_default=func.now())
     updated_at          = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -140,6 +141,7 @@ def init_db():
         "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS travel_expense INTEGER",
         "ALTER TABLE kicpa_price_table ADD COLUMN IF NOT EXISTS effective_from DATE",
         "ALTER TABLE kicpa_customer_contacts ADD COLUMN IF NOT EXISTS kicpa_manager VARCHAR(100)",
+        "ALTER TABLE kicpa_contents ADD COLUMN IF NOT EXISTS thumbnail_yn BOOLEAN DEFAULT FALSE",
     ]:
         try:
             with engine.connect() as conn:

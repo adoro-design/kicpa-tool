@@ -24,6 +24,7 @@ PRICE_NEW       = 500_000
 PRICE_PORTING   = 50_000
 PRICE_EDIT_PORT = 160_000
 PRICE_TRAVEL_HR = 100_000
+THUMBNAIL_PRICE = 70_000     # 썸네일 이미지 제작비 (건당, VAT별도)
 
 # 유형별 1차시당 표준 작업시간 (촬영·편집 담당, 시간 단위)
 WORK_HOURS_PER_SESSION = {
@@ -340,13 +341,17 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
 
     tr_rate = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
 
-    # 출장비 행 포함 총 행 수 계산
+    # 출장비 행 포함 총 행 수 계산 (썸네일 행 포함)
     rows_data = []
     for idx2, c2 in enumerate(courses):
-        rows_data.append((False, c2, 0))
+        rows_data.append(('course', c2, 0))
         ta = get_travel_for(c2, tr_rate)
         if ta > 0:
-            rows_data.append((True, c2, ta))
+            rows_data.append(('travel', c2, ta))
+    # 썸네일 건수 합산 → 맨 끝에 1행 추가
+    thumb_count = sum(1 for c2 in courses if getattr(c2, 'thumbnail_yn', False))
+    if thumb_count > 0:
+        rows_data.append(('thumbnail', None, thumb_count))
 
     total_n = len(rows_data)
     if total_n > tdc:   ws.insert_rows(ttr, total_n - tdc)
@@ -379,13 +384,13 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
         c_cell.alignment = Alignment(horizontal='right', vertical='center')
 
     course_seq = 0
-    for ri, (is_travel, c, ta) in enumerate(rows_data):
+    for ri, (row_type, c, extra) in enumerate(rows_data):
         r = tds + ri
         hdr = ws.cell(tds - 1, 1)
-        is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
-        up = get_unit_price_for(c, price_tbl)
 
-        if not is_travel:
+        if row_type == 'course':
+            is_new, is_p, is_ep = classify_fmt(c.shooting_format or "")
+            up = get_unit_price_for(c, price_tbl)
             course_seq += 1
             vals = {1:course_seq, 2:"포팅" if (is_p or is_ep) else "신규",
                     3:c.course_name, 4:c.instructor, 5:"",
@@ -393,14 +398,14 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                     8:c.open_date, 9:c.shooting_format or "",
                     10:c.shooting_format or "", 11:c.quiz_count or "",
                     12:up, 13:f"=L{r}*F{r}", 14:f"=M{r}*1.1"}
-        else:
+        elif row_type == 'travel':
             th      = c.travel_hours or 1
             td      = getattr(c, 'travel_days', None)
             loc     = getattr(c, 'location', None) or ""
             day_str = f"({td}일)" if td else ""
             loc_str = f" [{loc}]" if loc else ""
             tname   = f"{c.course_name} 출장 : {th}시간{day_str}{loc_str}"
-            t_amt   = get_travel_for(c, tr_rate)  # 실제 출장비 금액
+            t_amt   = extra  # 실제 출장비 금액
             vals    = {1:"", 2:"출장비",
                        3:tname, 4:"", 5:"",
                        6:"",   # 시간 공란 → 전체 합계 제외
@@ -408,6 +413,15 @@ def gen_devreq_excel(courses, dept, month_str, year, price_tbl):
                        12:PRICE_TRAVEL_HR,
                        13:t_amt,              # 금액 직접값
                        14:round(t_amt*1.1)}   # 총액(VAT포함)
+        else:  # thumbnail
+            thumb_n = extra  # 건수
+            thumb_amt = thumb_n * THUMBNAIL_PRICE
+            vals = {1:"", 2:"디자인",
+                    3:f"썸네일 : {thumb_n}건", 4:"", 5:"",
+                    6:"", 7:"", 8:"", 9:"", 10:"", 11:"",
+                    12:THUMBNAIL_PRICE,
+                    13:thumb_amt,
+                    14:round(thumb_amt * 1.1)}
 
         for col, val in vals.items():
             try:
@@ -515,11 +529,14 @@ def gen_profile_docx(courses, dept, month_str, year, price_tbl,
     th  = sum((c.travel_hours or 1) for c in courses
               if c.shooting_format and "출장" in c.shooting_format)
 
+    thumb_n = sum(1 for c in courses if getattr(c, 'thumbnail_yn', False))
+
     dparts = []
     if ns: dparts.append(f"- 신규 : {ns}차시(단가 : \\500,000, VAT별도) / 유상개발")
     if pc: dparts.append(f"- 포팅(무편집) : {pc}챕터(단가 : \\50,000, VAT별도) / 유상개발")
     if ec: dparts.append(f"- 포팅(편집) : {ec}챕터(단가 : \\160,000, VAT별도) / 유상개발")
     if th: dparts.append(f"- 출장비 : {th}시간(단가 : \\100,000, VAT별도)")
+    if thumb_n: dparts.append(f"- 썸네일 : {thumb_n}건(단가 : \\70,000, VAT별도)")
     new_detail = ("1. 사업내용\n(1) 한공회 콘텐츠 개발\n"
                   + "\n".join(dparts)
                   + f"\n(2) 개발기간 : {fmt_kr(ps)} ~ {fmt_kr(pe)}")
