@@ -1077,6 +1077,10 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
             return capped * travel_rate
         return travel_rate  # 기본 1시간
 
+    def get_thumbnail_expense(content_row):
+        """썸네일 이미지 제작비 (건당 70,000원)"""
+        return 70000 if getattr(content_row, 'thumbnail_yn', False) else 0
+
     # billing 템플릿 하위 호환용
     def get_price(fmt):
         return match_price(fmt or "")
@@ -1085,7 +1089,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
     for r in contents:
         d = r.department or "미지정"
         if d not in summary: summary[d] = {"count":0,"sessions":0,"total":0,"billed":0}
-        p = get_unit_price(r) * (r.session_count or 0) + get_travel_expense(r)
+        p = get_unit_price(r) * (r.session_count or 0) + get_travel_expense(r) + get_thumbnail_expense(r)
         summary[d]["count"] += 1
         summary[d]["sessions"] += r.session_count or 0
         summary[d]["total"] += p
@@ -1103,6 +1107,7 @@ def billing_page(request: Request, year: int = 2026, month: str = "", dept: str 
         "billing_months": billing_months,
         "get_price": get_price, "get_unit_price": get_unit_price,
         "get_travel_expense": get_travel_expense,
+        "get_thumbnail_expense": get_thumbnail_expense,
     })
 
 # ── 단가표 관리 ──────────────────────────
@@ -1438,6 +1443,7 @@ def documents_generate(request: Request, year: int = Form(2026),
             return sum(
                 docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
                 + docgen.get_travel_for(c, tr)
+                + (docgen.THUMBNAIL_PRICE if getattr(c, 'thumbnail_yn', False) else 0)
                 for c in rows
             )
         all_depts = [d[0] for d in db.query(Content.department)
@@ -1482,6 +1488,7 @@ def documents_generate(request: Request, year: int = Form(2026),
                 return sum(
                     docgen.get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
                     + docgen.get_travel_for(c, tr_rate)
+                    + (docgen.THUMBNAIL_PRICE if getattr(c, 'thumbnail_yn', False) else 0)
                     for c in grp
                 )
             max_manager = max(groups, key=lambda m: subgroup_rev(groups[m])) if groups else None

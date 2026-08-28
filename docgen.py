@@ -120,7 +120,9 @@ def calc_revenue(courses, price_tbl):
     tr = price_tbl.get("1 ~ 4시간", PRICE_TRAVEL_HR)
     return sum(
         get_unit_price_for(c, price_tbl) * (c.session_count or c.chapter_count or 0)
-        + get_travel_for(c, tr) for c in courses)
+        + get_travel_for(c, tr)
+        + (THUMBNAIL_PRICE if getattr(c, 'thumbnail_yn', False) else 0)
+        for c in courses)
 
 def calc_labor_amounts(ps, pe, pm_rate, prod_rate):
     d = (pe - ps).days
