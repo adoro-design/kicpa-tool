@@ -1424,7 +1424,8 @@ def documents_generate(request: Request, year: int = Form(2026),
 
     try:
         courses = db.query(Content).filter_by(year=year, department=dept,
-                                              billing_month=month).all()
+                                              billing_month=month)\
+                                  .order_by(Content.shooting_date.asc().nullslast(), Content.id.asc()).all()
         if not courses:
             return RedirectResponse(
                 f"/documents?year={year}&dept={dept}&month={month}&msg=no_data", 302)
