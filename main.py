@@ -801,6 +801,21 @@ async def import_gsheet(request: Request, year: int = Form(2026),
             existing = db.query(Content).filter_by(
                 year=year, original_code=data['original_code']
             ).first()
+            if not existing:
+                # 원코드 매칭 실패 → 원코드 없는 고아 레코드와 매칭 시도
+                # 기준: 같은 연도 + 부서 + 촬영월 + 차시수, 원코드 없음, 1건만 매칭 시 update
+                q = db.query(Content).filter_by(year=year).filter(
+                    or_(Content.original_code == None, Content.original_code == "")
+                )
+                if data.get('department'):
+                    q = q.filter_by(department=data['department'])
+                if data.get('shooting_month'):
+                    q = q.filter_by(shooting_month=data['shooting_month'])
+                if data.get('session_count'):
+                    q = q.filter_by(session_count=data['session_count'])
+                candidates = q.all()
+                if len(candidates) == 1:
+                    existing = candidates[0]
             if existing:
                 for k, v in data.items():
                     if k not in PROTECTED:
