@@ -554,6 +554,23 @@ def content_edit_save(request: Request, id: int = Form(0), year: int = Form(2026
     if f_search:  params["search"]  = f_search
     return RedirectResponse("/contents?" + urlencode(params), 302)
 
+@app.post("/content/delete/{cid}")
+def content_delete(request: Request, cid: int,
+    f_page: int = Form(1), f_dept: str = Form(""), f_month: str = Form(""),
+    f_fmt: str = Form(""), f_billing: str = Form(""), f_search: str = Form(""),
+    db: Session = Depends(get_db)):
+    require_admin(request)
+    db.query(Content).filter_by(id=cid).delete()
+    db.commit()
+    from urllib.parse import urlencode
+    params = {"page": f_page}
+    if f_dept:    params["dept"]    = f_dept
+    if f_month:   params["month"]   = f_month
+    if f_fmt:     params["fmt"]     = f_fmt
+    if f_billing: params["billing"] = f_billing
+    if f_search:  params["search"]  = f_search
+    return RedirectResponse("/contents?" + urlencode(params), 302)
+
 # ── 촬영 일정 ─────────────────────────────────────
 @app.get("/schedule", response_class=HTMLResponse)
 def schedule(request: Request, year: int = 2026, month: str = "", dept: str = "", db: Session = Depends(get_db)):

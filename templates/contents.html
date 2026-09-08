@@ -86,8 +86,17 @@
               {% if r.billing %}<span class="badge-billed">완료</span>{% else %}<span class="badge-notyet">-</span>{% endif %}
             </td>
             {% if user and user.role == 'admin' %}
-            <td>
+            <td style="white-space:nowrap;">
               <a href="/content/edit?id={{ r.id }}&f_page={{ page }}&f_dept={{ dept }}&f_month={{ month }}&f_fmt={{ fmt }}&f_billing={{ billing }}&f_search={{ search }}" class="btn btn-xs btn-outline-secondary" style="font-size:.75rem; padding:2px 8px;">수정</a>
+              <form method="post" action="/content/delete/{{ r.id }}" style="display:inline;" onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                <input type="hidden" name="f_page" value="{{ page }}">
+                <input type="hidden" name="f_dept" value="{{ dept }}">
+                <input type="hidden" name="f_month" value="{{ month }}">
+                <input type="hidden" name="f_fmt" value="{{ fmt }}">
+                <input type="hidden" name="f_billing" value="{{ billing }}">
+                <input type="hidden" name="f_search" value="{{ search }}">
+                <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.75rem; padding:2px 8px;">삭제</button>
+              </form>
             </td>
             {% endif %}
           </tr>
