@@ -1437,12 +1437,17 @@ def documents_page(request: Request, year: int = 2026, dept: str = "", month: st
     billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
     preview = []
     if dept and month:
-        preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month).all()
+        preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month)\
+                                   .order_by(Content.shooting_date.asc().nullslast(), Content.id.asc()).all()
+        contacts = db.query(CustomerContact).filter_by(department=dept, is_active=True).all() if dept else []
+    else:
+        contacts = []
     return templates.TemplateResponse("documents.html", {
         "request": request, "user": get_user(request),
         "year": year, "depts": depts, "dept": dept,
         "billing_months": billing_months, "month": month,
         "preview": preview, "MONTHS": MONTHS,
+        "contacts": contacts,
     })
 
 @app.post("/documents/generate")

@@ -42,6 +42,15 @@
 <div class="form-section mb-4">
   <div class="form-section-title">{{ dept }} · {{ month }} — 과정 목록 ({{ preview|length }}건)</div>
 
+  {% if contacts|length > 1 %}
+  <div class="alert alert-warning py-2 mb-3" style="font-size:.84rem;">
+    <i class="bi-people me-1"></i>
+    <strong>담당자 {{ contacts|length }}명</strong> — 아래 목록의 <strong>한공회 담당자</strong> 기준으로 문서가 분리 생성됩니다.
+    담당자가 비어 있는 과정은 별도 폴더로 묶입니다.
+    <span class="text-muted ms-2">(등록된 담당자: {% for ct in contacts %}{{ ct.kicpa_manager }}{% if not loop.last %}, {% endif %}{% endfor %})</span>
+  </div>
+  {% endif %}
+
   {% if preview %}
   <div style="overflow-x:auto; margin-bottom:16px;">
     <table class="table table-sm table-hover" style="font-size:.83rem;">
@@ -50,13 +59,14 @@
           <th>#</th><th>과정명</th><th>형식</th>
           <th class="text-center">차시</th><th class="text-center">챕터</th>
           <th>촬영일</th><th>오픈일</th>
+          {% if contacts|length > 1 %}<th>한공회 담당자</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for c in preview %}
         <tr>
           <td class="text-muted">{{ loop.index }}</td>
-          <td style="max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+          <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
               title="{{ c.course_name }}">{{ c.course_name | clean_name }}</td>
           <td>
             {% if c.shooting_format %}<span class="badge-format">{{ c.shooting_format }}</span>
@@ -69,6 +79,12 @@
             {% if c.open_date %}{{ c.open_date | fmt_date }}
             {% else %}<span class="badge-notyet">미오픈</span>{% endif %}
           </td>
+          {% if contacts|length > 1 %}
+          <td style="font-size:.8rem;">
+            {% if c.kicpa_manager %}<strong>{{ c.kicpa_manager }}</strong>
+            {% else %}<span class="text-danger">미지정</span>{% endif %}
+          </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
