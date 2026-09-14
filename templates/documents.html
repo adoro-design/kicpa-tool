@@ -104,6 +104,20 @@
     <input type="hidden" name="year"  value="{{ year }}">
     <input type="hidden" name="dept"  value="{{ dept }}">
     <input type="hidden" name="month" value="{{ month }}">
+    {% if contacts|length > 1 %}
+    <div class="mb-3">
+      <label class="form-label fw-semibold">담당자 선택</label>
+      <select name="target_manager" class="form-select" style="max-width:300px;">
+        <option value="">전체 (담당자별 분리 생성)</option>
+        {% for ct in contacts %}
+        <option value="{{ ct.kicpa_manager }}">{{ ct.kicpa_manager }} 담당자만</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">특정 담당자만 선택하면 해당 과정만 포함된 문서가 생성됩니다.</div>
+    </div>
+    {% else %}
+    <input type="hidden" name="target_manager" value="">
+    {% endif %}
     <div class="d-flex align-items-center gap-3">
       <button type="submit" class="btn btn-primary {% if user and user.role == 'viewer' %}viewer-lock{% endif %}" data-lock-type="editor" style="font-size:.95rem; padding:10px 28px;">
         <i class="bi-file-earmark-zip me-2"></i>문서 생성 (ZIP 다운로드)

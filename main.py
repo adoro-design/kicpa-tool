@@ -1453,6 +1453,7 @@ def documents_page(request: Request, year: int = 2026, dept: str = "", month: st
 @app.post("/documents/generate")
 def documents_generate(request: Request, year: int = Form(2026),
                        dept: str = Form(""), month: str = Form(""),
+                       target_manager: str = Form(""),
                        db: Session = Depends(get_db)):
     import traceback
     require_editor(request)
@@ -1491,6 +1492,14 @@ def documents_generate(request: Request, year: int = Form(2026),
         include_studio = (dept == max_dept)
 
         contacts = db.query(CustomerContact).filter_by(department=dept, is_active=True).all()
+
+        # 특정 담당자 선택 시: 해당 담당자 과정만 필터링 + 단일 담당자로 처리
+        if target_manager and len(contacts) > 1:
+            courses = [c for c in courses if (c.kicpa_manager or "") == target_manager]
+            contacts = [ct for ct in contacts if ct.kicpa_manager == target_manager]
+            if not courses:
+                return RedirectResponse(
+                    f"/documents?year={year}&dept={dept}&month={month}&msg=no_data", 302)
 
         if len(contacts) > 1:
             # 부서에 담당자가 여럿 → kicpa_manager 기준으로 분리 생성
