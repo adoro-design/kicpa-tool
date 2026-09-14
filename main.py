@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, case
 from starlette.middleware.sessions import SessionMiddleware
 from passlib.context import CryptContext
 from datetime import date
-import os, io, re
+import os, io, re, zipfile
 from dotenv import load_dotenv
 
 from database import get_db, init_db, SessionLocal, User, Content, PriceTable, Document, StudioRental, CustomerContact, CalcSettings
