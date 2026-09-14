@@ -1436,10 +1436,15 @@ def documents_page(request: Request, year: int = 2026, dept: str = "", month: st
                       .filter(Content.billing_month != None).distinct().all()]
     billing_months.sort(key=lambda m: MONTH_ORDER.get(m, 99))
     preview = []
+    managers = []  # 과정 데이터에서 실제 담당자 목록
     if dept and month:
         preview = db.query(Content).filter_by(year=year, department=dept, billing_month=month)\
                                    .order_by(Content.shooting_date.asc().nullslast(), Content.id.asc()).all()
-        contacts = db.query(CustomerContact).filter_by(department=dept, is_active=True).all() if dept else []
+        # 고객담당자 수 (다중 여부 판단용)
+        contacts = db.query(CustomerContact).filter_by(department=dept, is_active=True).all()
+        # 실제 과정에 기록된 담당자 목록 (정렬, 중복 제거)
+        if len(contacts) > 1:
+            managers = sorted({c.kicpa_manager for c in preview if c.kicpa_manager})
     else:
         contacts = []
     return templates.TemplateResponse("documents.html", {
@@ -1447,7 +1452,7 @@ def documents_page(request: Request, year: int = 2026, dept: str = "", month: st
         "year": year, "depts": depts, "dept": dept,
         "billing_months": billing_months, "month": month,
         "preview": preview, "MONTHS": MONTHS,
-        "contacts": contacts,
+        "contacts": contacts, "managers": managers,
     })
 
 @app.post("/documents/generate")
