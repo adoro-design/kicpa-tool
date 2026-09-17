@@ -254,6 +254,7 @@
               {{ "{:,}".format(price) }}원
               {% if r.custom_price %}<br><span style="font-size:.7rem; color:#e67700;">★별도</span>{% endif %}
               {% if travel %}<br><span style="font-size:.7rem; color:#0891b2;">+출장비 {{ "{:,}".format(travel) }}원</span>{% endif %}
+              {% if thumb %}<br><span style="font-size:.7rem; color:#7c3aed;">+썸네일 {{ "{:,}".format(thumb) }}원</span>{% endif %}
             {% else %}-{% endif %}
           </td>
           <td class="text-end" style="font-size:.84rem; font-weight:{% if amt %}600{% else %}400{% endif %};">
