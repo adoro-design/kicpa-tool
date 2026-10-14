@@ -137,7 +137,7 @@
       </div>
       <div class="col-md-6">
         <label class="form-label">별도 단가 <small class="text-muted">(원/차시, VAT별도)</small></label>
-        <input type="number" name="custom_price" class="form-control" step="1000"
+        <input type="number" name="custom_price" class="form-control" step="1"
                placeholder="단가표 적용 시 공란"
                value="{{ row.custom_price if row and row.custom_price is not none else '' }}">
       </div>
